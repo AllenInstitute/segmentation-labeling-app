@@ -7,7 +7,7 @@
 	body {
 		padding-left: 20px;
 		margin-bottom: 20px;
-    max-width: 1280px;
+    max-width: 1380px;
     margin: auto;
 	}
 	#outer-container {
@@ -15,7 +15,7 @@
       flex-wrap: wrap;
 	    justify-content: space-around;
 	    max-width: 650px;
-      min-width: 500px;
+      min-width: 600px;
 	    /* margin-left: 100px; */
 	}
   .roi-overlay {
@@ -135,7 +135,7 @@
         <div class="progress-bar">
           <div id="progress-fill"></div>
         </div>
-        <canvas id="myChart" width="500" height="100"></canvas>
+        <canvas id="myChart" width="600" height="100"></canvas>
         <div id="video-instructions">
           <p>Click a point on the ROI trace to jump to that point in the video.<br>
           If the video is currently playing, it will continue playing at the selected time.<br>
@@ -200,12 +200,18 @@
           datasets: [{
               label: 'Trace',
               data: randomData,
-              backgroundColor: 'rgba(0, 119, 204, 0.8)',
-              borderColor: 'rgba(0, 119, 204, 0.3)',
+              backgroundColor: 'rgba(255, 134, 0, 0.8)',
+              borderColor: 'rgba(255, 134, 0, 0.3)',
               fill: false,
           }]
       },
       options: {
+          elements: {
+            line: {
+              tension: 0.1,
+              borderWidth: 1
+            }
+          },
           legend: {
             display: false
           },
