@@ -9,7 +9,7 @@ jobs:
       - run:
           command: |
             # pytest would be a dep in requirements.txt
-            pytest
+            python -m pytest
           name: Test
 orbs:
   python: circleci/python@0.1
