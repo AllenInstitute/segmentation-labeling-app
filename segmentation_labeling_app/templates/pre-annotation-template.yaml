@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  segmentation-labeling-app-copy
+
+  Sample SAM Template for segmentation-labeling-app-copy
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 60
+
+Resources:
+  PreAnnotationFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      FunctionName: PreAnnotation
+      Description: Pre annotation lambda to provide resources to HTML interface
+      Role: arn:aws:iam::422892117367:role/AnnotationRoles
+      CodeUri: ../pre_annotation/
+      Handler: preAnnotation.lambda_handler
+      Runtime: python3.7
+      Events:
+        PreAnnotationAPI:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: ../pre_annotation
+            Method: get
+
+Outputs:
+  PreAnnotationAPI:
+    Description: "API Gateway endpoint URL for Prod stage for Pre Annotation Function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/segmentation_labeling_app/pre-annotation/"
+  PreAnnotationFunction:
+    Description: "Pre Annotation Lambda Function ARN"
+    Value: !GetAtt PreAnnotationFunction.Arn
