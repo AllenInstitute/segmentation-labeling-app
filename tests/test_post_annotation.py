@@ -92,7 +92,7 @@ def test_post_annotation_lambda(json_bucket_fixture):
         }
     }
 
-    consolidate_response = post_annotation_lambda.lambda_hanlder(event=payload_fix, context=None)
+    consolidate_response = post_annotation_lambda.lambda_handler(event=payload_fix, context=None)
     assert expected_response == consolidate_response[0]
 
     os.remove(Path(parsed_url.path[1:]))

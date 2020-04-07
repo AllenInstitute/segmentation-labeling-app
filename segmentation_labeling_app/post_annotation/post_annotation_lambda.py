@@ -3,7 +3,7 @@ import boto3
 from urllib.parse import urlparse
 
 
-def lambda_hanlder(event, context) -> bool:
+def lambda_handler(event, context) -> dict:
     """
     The lambda function to be run upon the completion of a labeling task
     by a user. Transports the data to an s3 bucket for later use or movement to
