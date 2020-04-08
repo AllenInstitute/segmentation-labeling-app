@@ -11,7 +11,7 @@ import segmentation_labeling_app.post_annotation.post_annotation_lambda as post_
 
 
 @pytest.fixture()
-def json_bucket_fixture():
+def json_fixture():
     default_data = [
         {
             "datasetObjectId": 'dummy_id',
@@ -31,15 +31,7 @@ def json_bucket_fixture():
             }]
         }
     ]
-    test_path = Path(__file__).parent
-    bucket_item_path = test_path / 'test_resources'
-    os.mkdir(bucket_item_path)
-    bucket_item_path = bucket_item_path / 'test_bucket.txt'
-    with open(bucket_item_path, 'w') as open_file:
-        json.dump(default_data, open_file)
-        open_file.close()
-
-    yield bucket_item_path.as_posix()
+    yield default_data
 
 
 def payload_fixture(updates: dict):
@@ -59,24 +51,20 @@ def payload_fixture(updates: dict):
 
 
 @mock_s3
-@pytest.mark.parametrize("json_bucket_fixture", [({})],
-                         indirect=["json_bucket_fixture"])
-def test_post_annotation_lambda(json_bucket_fixture):
-    file_url = '//mock_bucket/' + str(json_bucket_fixture)
-    payload_update = {"s3Uri": file_url}
+@pytest.mark.parametrize("json_fixture", [({})],
+                         indirect=["json_fixture"])
+def test_post_annotation_lambda(json_fixture):
+    payload_update = {"s3Uri": "s3://test_bucket/key/file.txt"}
     payload_fix = payload_fixture({"payload": payload_update})
 
     client = boto3.client('s3')
-    parsed_url = urlparse(file_url)
-    client.create_bucket(Bucket=parsed_url.netloc)
-    client.upload_file(Filename=parsed_url.path[1:], Bucket=parsed_url.netloc,
-                       Key=parsed_url.path[1:])
+    print(json_fixture)
+    client.create_bucket(Bucket="test_bucket")
+    client.put_object(Bucket="test_bucket", Key="key/file.txt", Body=json.dumps(json_fixture))
 
-    with open(parsed_url.path[1:], 'r') as open_json:
-        json_data = json.load(open_json)
-        dataset = json_data[0]
-        annotation = dataset['annotations'][0]
-        new_annotation = json.loads(annotation['annotationData']['content'])
+    dataset = json_fixture[0]
+    annotation = dataset['annotations'][0]
+    new_annotation = json.loads(annotation['annotationData']['content'])
 
 
     expected_response = {
@@ -94,6 +82,3 @@ def test_post_annotation_lambda(json_bucket_fixture):
 
     consolidate_response = post_annotation_lambda.lambda_handler(event=payload_fix, context=None)
     assert expected_response == consolidate_response[0]
-
-    os.remove(Path(parsed_url.path[1:]))
-    os.rmdir(Path(parsed_url.path[1:]).parent)
