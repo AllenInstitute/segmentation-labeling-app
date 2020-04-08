@@ -1,0 +1,502 @@
+<script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://code.highcharts.com/stock/highstock.js"></script>
+<script src="https://code.highcharts.com/stock/modules/data.js"></script>
+<script src="https://code.highcharts.com/modules/boost.js"></script>
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+<style>
+	body {
+		padding-left: 20px;
+		margin-bottom: 20px;
+    max-width: 1380px;
+    margin: auto;
+	}
+  #play-pause {
+    position: relative;
+    top: -52;
+    left: -10;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    cursor: pointer;
+  }
+  .image-container {
+    height: 128;
+    width: 128;
+    margin-bottom: 40;
+    position: relative;
+  }
+  .image-label{
+    width: 128;
+    margin-bottom:10;
+    font-size: smaller;
+  }
+  .toggle-button{
+    margin-bottom: 10;
+    font-size: small;
+  }
+  .progress-bar {
+    flex:10;
+    position: relative;
+    display:flex;
+    flex-basis:100%;
+    width: 128px;
+    top: -40;
+    height:5px;
+    transition:height 0.3s;
+    background:rgba(0,0,0,0.5);
+    cursor:ew-resize;
+    margin-bottom:20;
+  }
+  #progress-fill {
+    width:0%;
+    background: #d3d3d3;
+    flex:10;
+    flex-basis:0%;
+  }
+  .image-container:hover #avg-projection, .image-container:hover #max-projection, .image-container:hover #roi-vid{
+    transform: scale(2);
+    transition: transform 0.35s ease-in-out;
+    position: relative;
+    z-index: 100;
+    border: 10px solid rgba(235, 235, 235, 1.0);
+    border-radius: 10px;
+  }
+</style>
+
+
+<crowd-form>
+  <crowd-classifier
+    name="roiLabel"
+    categories="['cell', 'not cell']"
+    header="Is the region of interest a cell or not a cell?"
+  >
+    <classification-target>
+      <div class="container">
+        <div class="row">
+          <div class="col-sm">
+            <button class="toggle-button outline" id="toggle-mask" type="button" onclick="toggleMaskOutline()">Show Mask Overlay</button>
+          </div>
+          <div class="col-sm text-center">
+            <button class="toggle-button is-visible" id="toggle-roi" type="button">Hide ROI</button>
+          </div>
+          <div class="col-sm text-right">
+            <button class="toggle-button default-colors" id="toggle-colorblind" type="button" onclick="toggleColorblind()">Colorblind Mode</button>
+          </div>
+        </div>
+        <div class="row no-gutters justify-content-md-center">
+          <div class="col-sm">
+            <span class="image-label">2p Recording</span>
+            <div class="image-container">
+              <canvas id="roi-vid" width="128" height="128"></canvas>
+            </div>
+            <div class="video-controls">
+              <div class="progress-bar">
+                <div id="progress-fill"></div>
+              </div>
+              <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+            </div>
+          </div>
+          <div class="col-sm">
+            <span class="image-label">Average Projection</span>
+            <div class="image-container">
+              <canvas id="avg-projection" width="128" height="128"></canvas>
+            </div>
+          </div>
+          <div class="col-sm">
+            <span class="image-label">Max Projection</span>
+            <div class="image-container">
+              <canvas id="max-projection" width="128" height="128"></canvas>
+            </div>
+          </div>
+          <div class="col-sm">
+            <span class="image-label">ROI Mask</span>
+            <div class="image-container border"> 
+              <!-- TODO: Replace with template vars -->
+                <img src="../resources/roi_mask_128x128.png"></span>
+            </div>
+          </div>
+        </div>
+        <div class="row justify-content-md-center">
+          <div class="col" id="hc-container" style="max-width:580px; height:300px;"></div>
+        </div>
+      </div>
+      
+    </classification-target>
+    
+    <full-instructions header="Cell Detection Instructions">
+        <p>Decide whether the region of interest is a cell or not.</p>
+        <div>
+           <p><strong>Example: </strong></p>
+           <p><strong>Response: </strong></p>
+        </div>
+    </full-instructions>
+
+    <short-instructions>
+        Decide whether the region of interest is a cell or not. <br>
+        <br>
+        Jump to a point in the 2p recording by clicking on the chart trace. <br>
+        To play a selected time range, click and drag on the chart or adjust
+        the navigation slider below the trace, then click "Play Selection".
+    </short-instructions>
+  </crowd-classifier>
+</crowd-form>
+
+<script>
+  // --- generate dummy data  --- //
+  function getData(n) {
+    var arr = [],
+        i,
+        x,
+        a,
+        b,
+        c,
+        spike;
+    for (
+        i = 0, x = Date.UTC(new Date().getUTCFullYear(), 0, 1) - n * 36e5;
+        i < n;
+        i = i + 1, x = x + 36e5
+    ) {
+        if (i % 100 === 0) {
+            a = 2 * Math.random();
+        }
+        if (i % 1000 === 0) {
+            b = 2 * Math.random();
+        }
+        if (i % 10000 === 0) {
+            c = 2 * Math.random();
+        }
+        if (i % 50000 === 0) {
+            spike = 10;
+        } else {
+            spike = 0;
+        }
+        arr.push(
+            2 * Math.sin(i / 100) + a + b + c + spike + Math.random()
+        );
+    }
+    return arr;
+}
+  let n = 26 * 500,   // Seconds in movie with fake 2ms sampling rate
+    data = getData(n);
+
+  // Get globals
+  // TODO: Use template vars
+  var video = new Video("../resources/exp_716956096_4hz_small_128x128.mp4"),
+    videoButton = document.getElementById('play-pause'),
+    colorblindMode = false,
+    maskOverlays = false,
+    hiddenRois = false,
+    progressFill = document.getElementById("progress-fill")
+    canvas = document.getElementById("roi-vid"),
+    avgProjection = document.getElementById("avg-projection"),
+    maxProjection = document.getElementById("max-projection"),
+    roiOverlays = new RoiImages(),
+    visButton = document.getElementById("toggle-roi"),
+    toggleMaskButton = document.getElementById("toggle-mask"),
+    overlay = getRoiOverlay();
+  
+  // Initialize canvases
+  // TODO: Replace with template vars
+  overlayImages(avgProjection, "../resources/avgint_128x128.png", overlay.mask.src, overlay.opacity, overlay.filter);
+  overlayImages(maxProjection, "../resources/maxint_128x128.png", overlay.mask.src, overlay.opacity, overlay.filter);
+  // Need greater than zero time to get the first frame to draw
+  video.currentTime = 0.000001;
+  videoProcessor();
+  
+  // Add event listeners
+  video.addEventListener('play', function() {
+    // Update play/pause button icon with video state
+    togglePlayPause();
+  }, false);
+
+  video.addEventListener('pause', function() {
+    // Update play/pause button icon with video state
+    togglePlayPause();
+  }, false);
+
+  video.addEventListener('ended', function() {
+    // Update play/pause button icon with video state
+    togglePlayPause();
+  }, false);
+
+  video.addEventListener("timeupdate", function() {
+    // Update progress bar with video time
+    updateProgress()
+  }, false);
+
+  video.addEventListener('play', function () {
+    // Draw canvas frames
+    videoProcessor();
+  }, false);
+
+  visButton.addEventListener("click", function () {
+    // Toggle visibility of ROIs
+    toggleRoiVis();
+  });
+
+  videoButton.addEventListener('click', function(e) {
+    // Play/pause video using button
+    let isPlaying = video.currentTime > 0 && !video.paused && !video.ended 
+    && video.readyState > 2;
+    if (!isPlaying) {
+      video.play();
+    } else {
+      video.pause();
+    }
+  });
+
+  // Create the chart
+  Highcharts.chart('hc-container', {
+
+    chart : {
+      zoomType: 'x',
+      events: {
+        load: function() {
+          var ch = this
+          
+          playSelection = ch.renderer.button('Play Selection', null, null, function(){
+            var extremes = ch.xAxis[0].getExtremes();
+            playVideoSelection(video, extremes.min, extremes.max);
+          }, {
+              zIndex: 20
+          }).attr({
+            id: 'playSelection',
+            align: 'left',
+            title: 'Play video selection'
+          }).add().align({
+            align: 'left',
+            x: 15,
+            y: 5
+          }, false, null);
+
+          zoomButton = ch.renderer.button('Reset zoom', null, null, function(){
+            ch.xAxis[0].setExtremes(null, null);
+          }, {
+              zIndex: 20
+          }).attr({
+            id: 'resetZoom',
+            align: 'right',
+            title: 'Reset zoom level 1:1'
+          }).add().align({
+            align: 'right',
+            x: -15,
+            y: 5
+          }, false, null);
+        },
+        click: function (event) {
+          video.pause();
+          video.currentTime = Math.floor(event.xAxis[0].value)
+        },
+      }
+    },
+
+    legend: {
+      enabled: false
+    },
+
+    caption: {
+      text: "Click a point on the ROI trace to jump to that point in the video. "+
+            "Select points by dragging on the chart, or by adjusting the navigation bar. "+
+            "Play movie for the selected timestamps by clicking the 'Play Selection' button."
+      },
+
+    title: {
+        text: 'Trace of ' + n + ' points',
+        style: {
+          fontSize: "18px"
+        }
+    },
+    yAxis: {
+      minPadding: 0
+    },
+
+    navigator: {
+      enabled: true,
+    },
+
+    series: [{
+        name: 'Hourly data points',
+        color: "#ff0000",
+        data: data,
+        tooltip: {
+            valueDecimals: 2
+        },
+        pointStart: 0,
+        pointInterval: 0.002, //.25,     // seconds; 4 fps sampling is 250 ms per frame
+        events: { 
+          click: function (event) {
+            video.pause();
+            video.currentTime = Math.floor(event.xAxis[0].value);
+          },
+        },
+    }]
+  });
+
+  function overlayImages(canvas, underlay, overlay, alpha, filter) {
+    // Draw two images on canvas. The alpha and filter values will be
+    // applied to the overlay image.
+    let underImg = new Image();
+    let overImg = new Image();
+    let ctx = canvas.getContext("2d")
+    underImg.onload = function () {
+      overImg.src = overlay
+    }
+    overImg.onload = function () {
+      ctx.drawImage(underImg, 0, 0);
+      ctx.filter = filter;
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(overImg, 0, 0);
+      ctx.filter = "none";
+      ctx.globalAlpha = 1.0;
+    }
+    underImg.src = underlay;
+  }
+
+  function RoiImages() {
+    // Preload mask and outline images and save them in an object for toggling
+    // TODO: Replace with template vars
+    let outline = new Image();
+    let mask = new Image();
+    outline.src = "../resources/roi_mask_outline_128x128.png";
+    mask.src = "../resources/roi_mask_128x128.png";
+    this.outline = outline;
+    this.mask = mask;
+  }
+
+  function getRoiOverlay() {
+    // Get the "active" ROI overlay image and associated states (filter, etc.)
+    // default
+    let roi = {"filter": "invert(10%) sepia(93%) saturate(7292%) hue-rotate(11deg) brightness(108%) contrast(118%)",
+                "visibility": 1.0};
+    let cb_filter = "invert(87%) sepia(27%) saturate(6091%) hue-rotate(353deg) brightness(105%) contrast(102%)"
+    if (maskOverlays) {
+      roi.mask = roiOverlays.mask;
+      roi.opacity = 0.5;
+    } else {
+      roi.mask = roiOverlays.outline;
+      roi.opacity = 1.0;
+    }
+    if (hiddenRois) { roi.visibility = 0.0; }
+    if (colorblindMode) {roi.filter = cb_filter; }
+    return roi
+  }
+
+  function Video(src) {
+    // Make a video element
+    let v = document.createElement("video");
+    if (src != "") {
+      v.src  = src;
+    }
+    return v;
+  }
+
+  function videoProcessor() {
+    // Draw the video frames on canvas (with overlay)
+    // TODO: Additional contrast/brightness controls
+    function step() {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.filter = overlay.filter;
+      ctx.globalAlpha = overlay.opacity * overlay.visibility;
+      ctx.drawImage(overlay.mask, 0, 0);
+      ctx.filter = "none";
+      ctx.globalAlpha = 1.0;
+      requestAnimationFrame(step);
+  }
+    let ctx = canvas.getContext("2d"),
+      overlay = getRoiOverlay();
+    requestAnimationFrame(step);
+  }
+
+  function toggleColorblind() {
+    // Toggle whether colorblind mode is on
+    // Colorblind mode makes the ROIs yellow for better contrast
+    let colorButton = document.getElementById("toggle-colorblind");
+    if (colorblindMode) {
+      colorblindMode = false;
+      colorButton.innerHTML = "Colorblind Mode";
+    } else {
+      colorblindMode = true;
+      colorButton.innerHTML = "Default Colors"
+
+    }
+    redrawCanvases();
+  }
+
+
+  function toggleRoiVis() {
+    // Toggle whether ROI overlays are shown on canvases
+    // Update button text
+    let visButton = document.getElementById("toggle-roi");
+    if (hiddenRois) {
+      hiddenRois = false;
+      visButton.innerHTML = "Hide ROI"
+    } else {
+      visButton.innerHTML = "Show ROI"
+      hiddenRois = true;
+    }
+    redrawCanvases();
+  }
+
+  function togglePlayPause() {
+    // Toggle the play/pause button icon
+    var isPlaying = !video.paused && !video.ended;
+    if (!isPlaying){
+      videoButton.innerHTML = "<i class='material-icons'>play_circle_outline</i>"
+    }
+    else {
+      videoButton.innerHTML = "<i class='material-icons'>pause_circle_outline</i>"
+    }
+  }
+
+  function updateProgress() {
+    // Update progress bar fill with % of time 
+    let value = video.currentTime / video.duration * 100;
+    progressFill.style.width = value.toString() + "%"
+    progressFill.style.flexBasis = value.toString() + "%"
+  }
+
+  function redrawCanvases() {
+    // TODO: Replace with template vars
+    let overlay = getRoiOverlay();
+    overlayImages(avgProjection, "../resources/avgint_128x128.png", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    overlayImages(maxProjection, "../resources/maxint_128x128.png", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    videoProcessor();
+  }
+
+  function toggleMaskOutline() {
+    // Control mask/outline state, and switch button text
+    let toggleMaskButton = document.getElementById('toggle-mask')
+    if (maskOverlays) {
+      maskOverlays = false;
+      toggleMaskButton.innerHTML = "Show Mask Overlay";
+    }
+    else {
+      maskOverlays = true;
+      toggleMaskButton.innerHTML = "Show Mask Outline";
+    }
+    redrawCanvases();
+  }
+
+  function playVideoSelection(video, startTime, endTime) {
+    // Play the video from startTime to endTime
+    video.removeEventListener("timeupdate", pauseAtTime);
+    let isPlaying = video.currentTime > 0 && !video.paused && !video.ended;
+    if (endTime <= startTime) throw "Selection end must be after start.";
+    if (!isPlaying) {
+      video.currentTime = startTime;
+      video.play();
+    } else {
+      video.currentTime = startTime;
+    }
+    var pauseAtTime = function(){
+      if (video.currentTime >= endTime) {
+        video.pause();
+        video.removeEventListener("timeupdate", pauseAtTime);
+      };
+    }
+    video.addEventListener("timeupdate", pauseAtTime);
+  };
+
+  </script>
