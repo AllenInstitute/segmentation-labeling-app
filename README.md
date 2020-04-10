@@ -1,6 +1,9 @@
 # segmentation-labeling-app
 Data pipeline and UI for human labeling of putative ROIs from 2p cell segmentations
 
+## Level of support
+We are not currently supporting this code, but simply releasing it to the community AS IS but are not able to provide any guarantees of support.  The community is welcome to submit issues, but you should not expect an active response.
+
 # Deploying pre annotation lambda handler
 
 ## Creating package
