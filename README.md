@@ -50,3 +50,26 @@ sam deploy --stack-name <stack-name> --template-file templates/packaged-post-ann
 This builds and deploys the lambda function to the AWS account linked through
 the AWS CLI. It associates it with the stack-name or creates a new stack with
 provided name. You can specify a role by providing the --role argument.
+
+# User Interface
+
+The user interface contains the following features:
+* 128x128 px views of the ROI, including:
+    - Full playable 2p recording (downsampled to 4Hz)
+    - Maximum projection image
+    - Average projection image
+    - ROI "postal stamp"
+* Toggle-able ROI overlays, including:
+    - Weighted mask
+    - Outline
+    - None
+* Interactive chart of 2p recording trace with the following features:
+    - Select and zoom points by clicking and dragging
+    - Select and navigate points with navigation bar
+    - Play 2p recording for the selected points
+    - Skip to a point in movie by selecting point in trace
+* Adjust 2p recording (using CSS Filters)
+    - [Contrast](https://developer.mozilla.org/en-US/docs/Web/CSS/filter-function/brightness)
+    - [Brightness](https://developer.mozilla.org/en-US/docs/Web/CSS/filter-function/contrast)
+* Zoom in views on mouse hover
+* Colorblind mode

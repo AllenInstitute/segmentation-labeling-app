@@ -10,12 +10,28 @@
 		padding-left: 20px;
 		margin-bottom: 20px;
     max-width: 1380px;
+    min-width: 500px;
     margin: auto;
 	}
+  label {
+    font-size: smaller;
+  }
+  .range-output {
+    font-size: smaller;
+  }
+  .slidecontainer {
+    width: 300;
+  }
+  .reset {
+    font-size: smaller;
+    position: relative;
+    left: 10;
+  }
   #play-pause {
     position: relative;
-    top: -52;
+    top: 0;
     left: -10;
+    height: 10;
     border: none;
     background-color: transparent;
     outline: none;
@@ -24,8 +40,8 @@
   .image-container {
     height: 128;
     width: 128;
-    margin-bottom: 40;
     position: relative;
+    margin-bottom: 30;
   }
   .image-label{
     width: 128;
@@ -33,21 +49,19 @@
     font-size: smaller;
   }
   .toggle-button{
-    margin-bottom: 10;
+    margin-bottom: 20;
     font-size: small;
   }
   .progress-bar {
-    flex:10;
     position: relative;
     display:flex;
     flex-basis:100%;
-    width: 128px;
-    top: -40;
+    top: 0;
     height:5px;
+    width: 128px;
     transition:height 0.3s;
     background:rgba(0,0,0,0.5);
     cursor:ew-resize;
-    margin-bottom:20;
   }
   #progress-fill {
     width:0%;
@@ -73,7 +87,7 @@
     header="Is the region of interest a cell or not a cell?"
   >
     <classification-target>
-      <div class="container">
+      <div class="my-container">
         <div class="row">
           <div class="col-sm">
             <button class="toggle-button outline" id="toggle-mask" type="button" onclick="toggleMaskOutline()">Show Mask Overlay</button>
@@ -88,14 +102,16 @@
         <div class="row no-gutters justify-content-md-center">
           <div class="col-sm">
             <span class="image-label">2p Recording</span>
-            <div class="image-container">
-              <canvas id="roi-vid" width="128" height="128"></canvas>
-            </div>
-            <div class="video-controls">
-              <div class="progress-bar">
-                <div id="progress-fill"></div>
-              </div>
-              <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+            <div class="container">
+              <span class="image-container">
+                <canvas id="roi-vid" width="128" height="128"></canvas>
+              </span>
+              <span class="video-controls">
+                <span class="progress-bar">
+                  <span id="progress-fill"></span>
+                </span>
+                <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+              </span>
             </div>
           </div>
           <div class="col-sm">
@@ -118,7 +134,31 @@
             </div>
           </div>
         </div>
-        <div class="row justify-content-md-center">
+        <div class="row">
+          <div class="col">
+            <span class="slidecontainer">
+              <span>
+                <input type="range" min="0" max="200" value="100" class="slider" id="brightness-slider" name="brightness">
+                <label for="brightness">Video Brightness: </label>
+                <span class="range-output" id="brightness-output">100%</span>
+              </span>
+              <button class="reset" id="reset-brightness" type="button" onclick="setValueDefault('brightness-slider', 100)">Reset</button>
+            </span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col">
+            <span class="slidecontainer">
+              <span>
+                <input type="range" min="0" max="200" value="100" class="slider" id="contrast-slider" name="contrast">
+                <label for="contrast">Video Contrast: </label>
+                <span class="range-output" id="contrast-output">100%</span>
+              </span>
+              <button class="reset" id="reset-contrast" type="button" onclick="setValueDefault('contrast-slider', 100)">Reset</button>
+            </span>
+          </div>
+        </div>
+        <div class="row justify-content-around">
           <div class="col" id="hc-container" style="max-width:580px; height:300px;"></div>
         </div>
       </div>
@@ -195,6 +235,10 @@
     roiOverlays = new RoiImages(),
     visButton = document.getElementById("toggle-roi"),
     toggleMaskButton = document.getElementById("toggle-mask"),
+    brightnessSlider = document.getElementById("brightness-slider"),
+    contrastSlider = document.getElementById("contrast-slider"),
+    brightnessOutput = document.getElementById("brightness-output"),
+    contrastOutput = document.getElementById("contrast-output"),
     overlay = getRoiOverlay();
   
   // Initialize canvases
@@ -206,6 +250,14 @@
   videoProcessor();
   
   // Add event listeners
+  contrastSlider.addEventListener("input", function() {
+    contrastOutput.innerHTML = `${contrastSlider.value}%`;
+  }, false);
+
+  brightnessSlider.addEventListener("input", function() {
+    brightnessOutput.innerHTML = `${brightnessSlider.value}%`;
+  }, false);
+
   video.addEventListener('play', function() {
     // Update play/pause button icon with video state
     togglePlayPause();
@@ -234,7 +286,18 @@
   visButton.addEventListener("click", function () {
     // Toggle visibility of ROIs
     toggleRoiVis();
-  });
+  }, false);
+
+
+  brightnessSlider.addEventListener("input", function() {
+    // Update brightness/contrast values
+    videoProcessor();
+  }, false);
+
+  contrastSlider.addEventListener("input", function() {
+    // Update brightness/contrast values
+    videoProcessor();
+  }, false);
 
   videoButton.addEventListener('click', function(e) {
     // Play/pause video using button
@@ -354,6 +417,20 @@
     underImg.src = underlay;
   }
 
+  function setValueDefault(id, value) {
+    console.log(id);
+    console.log(value);
+    // Manually trigger input event to update associated label
+    let elem = document.getElementById(id),
+      event = new Event('input', {
+        bubbles: true,
+        cancelable: true,
+      });
+    console.log(elem);
+    elem.value = value;
+    elem.dispatchEvent(event)
+  }
+
   function RoiImages() {
     // Preload mask and outline images and save them in an object for toggling
     // TODO: Replace with template vars
@@ -396,6 +473,7 @@
     // Draw the video frames on canvas (with overlay)
     // TODO: Additional contrast/brightness controls
     function step() {
+      brightnessContrast(ctx)
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       ctx.filter = overlay.filter;
       ctx.globalAlpha = overlay.opacity * overlay.visibility;
@@ -407,6 +485,15 @@
     let ctx = canvas.getContext("2d"),
       overlay = getRoiOverlay();
     requestAnimationFrame(step);
+  }
+
+  function brightnessContrast(ctx) {
+    let brightnessSlider = document.getElementById("brightness-slider"),
+      contrastSlider = document.getElementById("contrast-slider");
+    let brightness = brightnessSlider.value,
+      contrast = contrastSlider.value;
+    filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+    ctx.filter = filter;
   }
 
   function toggleColorblind() {
