@@ -23,54 +23,31 @@ def test_binary_mask(coo_rows, coo_cols, coo_data, video_shape,
 
 
 @pytest.mark.parametrize(("coo_rows, coo_cols, coo_data, video_shape,"
-                          "segmentation_id, roi_id, threshold, expected_mask"),
+                          "segmentation_id, roi_id, threshold, expected_edges"),
                          [([1, 1, 1, 2, 2, 2, 3, 3, 3],
                            [1, 2, 3, 1, 2, 3, 1, 2, 3],
                            [0.8, 0.9, 0.85, 0.75, 0.8, 0.82, 0.9, 0.85, 1],
-                           (5, 5), 1, 1, 0.7, np.array([[0, 0, 0, 0, 0],
-                                                        [0, 1, 1, 1, 0],
-                                                        [0, 1, 0, 1, 0],
-                                                        [0, 1, 1, 1, 0],
-                                                        [0, 0, 0, 0, 0]])),
+                           (5, 5), 1, 1, 0.7, np.array([[[1, 1]], [[1, 2]],
+                                                        [[1, 3]], [[2, 3]],
+                                                        [[3, 3]], [[3, 2]],
+                                                        [[3, 1]], [[2, 1]]])),
                           ([1, 1, 1, 2, 2, 2, 2, 3, 3, 3],
                            [1, 2, 3, 0, 1, 2, 3, 1, 2, 3],
                            [0.75, 0.8, 0.9, 0.85, 0.75, 0.8, 0.82, 0.9, 0.85, 1],
-                           (5, 5), 1, 1, 0.7, np.array([[0, 0, 0, 0, 0],
-                                                        [0, 1, 1, 1, 0],
-                                                        [1, 1, 0, 1, 0],
-                                                        [0, 1, 1, 1, 0],
-                                                        [0, 0, 0, 0, 0]]))])
-def test_edge_detection_mask(coo_rows, coo_cols, coo_data, video_shape,
-                             segmentation_id, roi_id, threshold,
-                             expected_mask):
+                           (5, 5), 1, 1, 0.7, np.array([[[1, 1]], [[0, 2]],
+                                                        [[1, 3]], [[2, 3]],
+                                                        [[3, 3]], [[3, 2]],
+                                                        [[3, 1]], [[2, 1]]]))])
+def test_edge_detection_edges(coo_rows, coo_cols, coo_data, video_shape,
+                              segmentation_id, roi_id, threshold,
+                              expected_edges):
     test_roi = roi_module.ROI(coo_rows, coo_cols, coo_data,
                               video_shape, segmentation_id, roi_id)
-    edge_mask = test_roi.get_edge_mask(threshold=threshold)
-    assert np.array_equal(edge_mask, expected_mask)
-
-
-@pytest.mark.parametrize(("coo_rows, coo_cols, coo_data, video_shape,"
-                          "segmentation_id, roi_id, threshold,"
-                          "expected_edge_points"), [
-                        ([1, 1, 1, 2, 2, 2, 3, 3, 3],
-                         [1, 2, 3, 1, 2, 3, 1, 2, 3],
-                         [0.8, 0.9, 0.85, 0.75, 0.8, 0.82, 0.9, 0.85, 1],
-                         (5, 5), 1, 1, 0.7, np.array([[1, 1], [1, 2], [1, 3],
-                                                      [2, 1], [2, 3], [3, 1],
-                                                      [3, 2], [3, 3]])),
-                         ([1, 1, 1, 2, 2, 2, 2, 3, 3, 3],
-                          [1, 2, 3, 0, 1, 2, 3, 1, 2, 3],
-                          [0.75, 0.8, 0.9, 0.85, 0.75, 0.8, 0.82, 0.9, 0.85, 1],
-                          (5, 5), 1, 1, 0.7, np.array([[1, 1], [1, 2], [1, 3],
-                                                       [2, 0], [2, 1], [2, 3],
-                                                       [3, 1], [3, 2], [3, 3]]))])
-def test_edge_detection_points(coo_rows, coo_cols, coo_data, video_shape,
-                               segmentation_id, roi_id, threshold,
-                               expected_edge_points):
-    test_roi = roi_module.ROI(coo_rows, coo_cols, coo_data,
-                              video_shape, segmentation_id, roi_id)
-    edge_points = test_roi.get_roi_edge_coordinates(threshold=threshold)
-    assert np.array_equal(edge_points, expected_edge_points)
+    edge_points = test_roi.get_edge_points(threshold=threshold)
+    print('')
+    print(expected_edges)
+    print(edge_points[0])
+    assert np.array_equal(expected_edges, edge_points[0])
 
 
 @pytest.mark.parametrize(("coo_rows, coo_cols, coo_data, video_shape,"
@@ -112,21 +89,32 @@ def test_roi_get_center(coo_rows, coo_cols, coo_data, video_shape,
                           [0.8, 0.9, 0.85, 0.75, 0.8, 0.82, 0.9, 0.85, 1, 0.95, 0.85, 0.7],
                           (6, 6), 1, 1, 0.7, np.array([[0, 0, 0, 0, 0, 0],
                                                        [0, 0, 0, 0, 0, 0],
-                                                       [0, 0, 1, 1, 0, 0],
-                                                       [0, 0, 0, 0, 0, 0],
+                                                       [0, 0, 1, 0, 0, 0],
+                                                       [0, 0, 1, 0, 0, 0],
                                                        [0, 0, 0, 0, 0, 0],
                                                        [0, 0, 0, 0, 0, 0]]),
-                          np.array([[2, 2], [2, 3]])),
+                          np.array([[2, 2], [3, 2]])),
                          ([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4],
                           [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3],
                           [0.8, 0.9, 0.85, 0.75, 0.8, 0.82, 0.9, 0.85, 1, 0.95, 0.85, 0.7],
                           (6, 6), 1, 1, 0.7, np.array([[0, 0, 0, 0, 0, 0],
                                                        [0, 0, 0, 0, 0, 0],
-                                                       [0, 0, 1, 0, 0, 0],
-                                                       [0, 0, 1, 0, 0, 0],
+                                                       [0, 0, 1, 1, 0, 0],
+                                                       [0, 0, 0, 0, 0, 0],
                                                        [0, 0, 0, 0, 0, 0],
                                                        [0, 0, 0, 0, 0, 0]]),
-                          np.array([[2, 2], [3, 2]]))
+                          np.array([[2, 2], [2, 3]])),
+                         ([1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5],
+                          [1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                          [0.9, 0.85, 0.76, 0.89, 0.91, 0.92, 0.97, 0.73, 0.82, 0.73,
+                           0.92, 0.87, 0.85, 0.82, 0.78, 0.9, 0.99, 0.85, 0.74, 0.77,
+                           0.82, 0.91, 0.87, 0.89, 0.99], (7, 7), 1, 1, 0.7,
+                          np.array([[0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0],
+                                    [0, 0, 1, 1, 1, 0, 0], [0, 0, 1, 0, 1, 0, 0],
+                                    [0, 0, 1, 1, 1, 0, 0], [0, 0, 0, 0, 0, 0, 0],
+                                    [0, 0, 0, 0, 0, 0, 0]]),
+                          np.array([[2, 2], [2, 3], [2, 4], [3, 2], [3, 4],
+                                    [4, 2], [4, 3], [4, 4]]))
 ])
 def test_roi_get_inner_outline(coo_rows, coo_cols, coo_data, video_shape,
                                segmentation_id, roi_id, threshold,
