@@ -8,6 +8,8 @@ jobs:
       - python/save-cache
       - run:
           command: |
+            sudo pip install pipenv
+            pipenv install
             tox
           name: Test
 orbs:
