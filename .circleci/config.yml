@@ -8,9 +8,8 @@ jobs:
       - python/save-cache
       - run:
           command: |
-            sudo pip install pipenv
-            pipenv install
-            pipenv run tox
+            # pytest would be a dep in requirements.txt
+            python -m pytest
           name: Test
 orbs:
   python: circleci/python@0.1

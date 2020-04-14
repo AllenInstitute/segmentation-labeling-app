@@ -1,4 +1,3 @@
-tox
 pytest
 boto3
 moto
