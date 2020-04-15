@@ -1,6 +1,6 @@
 import sqlite3
 import pytest
-import segmentation_labeling_app.transfers.upload as upload
+import segmentation_labeling_app.transfers.utils as utils
 import json
 import boto3
 from moto import mock_s3
@@ -49,7 +49,7 @@ def db_file(tmpdir_factory):
 
 @pytest.mark.parametrize("key", ["abc/temp.csv", None])
 def test_upload_file(local_file, bucket, key):
-    bucket_path = upload.upload_file(local_file, bucket, key=key)
+    bucket_path = utils.upload_file(local_file, bucket, key=key)
 
     if key is None:
         key = pathlib.PurePath(local_file).name
@@ -60,7 +60,7 @@ def test_upload_file(local_file, bucket, key):
 @pytest.mark.parametrize("prefix", "abc/datetime")
 def test_upload_manifest_contents(
         local_manifest, bucket, prefix):
-    s3_manifest = upload.upload_manifest_contents(
+    s3_manifest = utils.upload_manifest_contents(
             local_manifest,
             bucket,
             prefix)
@@ -89,14 +89,14 @@ def test_get_manifests_from_db(db_file):
     conn.commit()
     conn.close()
 
-    results = upload.get_manifests_from_db(db_file, "manifest_table")
+    results = utils.get_manifests_from_db(db_file, "manifest_table")
     assert len(results) == 4
     for r in results:
         assert set(list(r.keys())) == set(list(test_dict.keys()))
         for key in test_dict.keys():
             assert r[key] == test_dict[key]
 
-    results = upload.get_manifests_from_db(
+    results = utils.get_manifests_from_db(
             db_file, "manifest_table", "WHERE rowid=2")
 
     assert len(results) == 1
@@ -118,7 +118,7 @@ def test_manifest_file_from_jsons(tmpdir_factory):
             jsons[-1][key] = value
 
     fn = tmpdir_factory.mktemp("manifest_file").join("manifest.jsonl")
-    upload.manifest_file_from_jsons(str(fn), jsons)
+    utils.manifest_file_from_jsons(str(fn), jsons)
 
     with open(str(fn), "r") as fp:
         lines = fp.readlines()

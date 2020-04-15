@@ -1,7 +1,7 @@
 import argschema
 import datetime
 import tempfile
-import segmentation_labeling_app.transfers.transfer_utils as utils
+import segmentation_labeling_app.transfers.utils as utils
 
 
 class UploadSchema(argschema.ArgSchema):
