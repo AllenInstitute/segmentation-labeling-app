@@ -58,7 +58,6 @@ def test_post_annotation_lambda(json_fixture):
     payload_fix = payload_fixture({"payload": payload_update})
 
     client = boto3.client('s3')
-    print(json_fixture)
     client.create_bucket(Bucket="test_bucket")
     client.put_object(Bucket="test_bucket", Key="key/file.txt", Body=json.dumps(json_fixture))
 

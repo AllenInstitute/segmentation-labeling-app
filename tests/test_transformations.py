@@ -4,7 +4,6 @@ import random
 import os
 
 import pytest
-import h5py
 import numpy as np
 import cv2
 import imageio
@@ -14,82 +13,42 @@ import segmentation_labeling_app.transforms.transformations as transformations
 
 @pytest.fixture()
 def video_fixture():
-    current_path = (Path(__file__)).parent
-    video_path = current_path / 'resources' / 'test_video.h5'
-    yield video_path
+    np.random.seed(0)
+    random_video = np.array(
+        [[[5, 5], [5, 5]], [[2, 2], [2, 2]],
+         [[4, 4], [4, 4]], [[0, 0], [0, 0]],
+         [[3, 2], [10, 7]], [[11, 1], [0, 5]],
+         [[8, 2], [12, 1]], [[6, 3], [2, 8]],
+         [[11, 3], [1, 17]], [[8, 3], [9, 0]]]
+    )
+    yield random_video
 
 
-def test_video_random_downsampling(video_fixture):
-    input_fps = 31
-    output_fps = 4
-    new_video = transformations.downsample_h5_video(video_path=video_fixture,
-                                                    input_fps=input_fps,
-                                                    output_fps=output_fps)
-
-    with h5py.File(video_fixture, 'r') as open_video:
-        video = open_video['data'][:]
-        match_count = 0
-        new_video_index = 0
-        sampling_ratio = int(input_fps / output_fps)
-        expected_count = math.ceil(len(video) / int((input_fps / output_fps)))
-
-        for i in range(0, len(video), sampling_ratio):
-            frames = video[i:(i + sampling_ratio)]
-            new_frame = new_video[new_video_index]
-            if new_frame in frames:
-                match_count += 1
-            new_video_index += 1
-        assert expected_count == match_count
-
-
-def test_video_maximum_downsampling(video_fixture):
-    input_fps = 31
-    output_fps = 4
-    new_video = transformations.downsample_h5_video(video_path=video_fixture,
-                                                    input_fps=input_fps,
-                                                    output_fps=output_fps,
-                                                    strategy='maximum')
-
-    with h5py.File(video_fixture, 'r') as open_video:
-        video = open_video['data'][:]
-        match_count = 0
-        new_video_index = 0
-        sampling_ratio = int(input_fps / output_fps)
-        expected_count = math.ceil(len(video) / int((input_fps / output_fps)))
-
-        for i in range(0, len(video), sampling_ratio):
-            frames = video[i:(i + sampling_ratio)]
-            new_frame = new_video[new_video_index]
-            test_frame = new_frame - np.max(frames, axis=0)
-            if not test_frame.any():
-                match_count += 1
-            new_video_index += 1
-        assert expected_count == match_count
-
-
-def test_video_average_downsampling(video_fixture):
-    input_fps = 31
-    output_fps = 4
-    new_video = transformations.downsample_h5_video(video_path=video_fixture,
-                                                    input_fps=input_fps,
-                                                    output_fps=output_fps,
-                                                    strategy='average')
-
-    with h5py.File(video_fixture, 'r') as open_video:
-        video = open_video['data'][:]
-        match_count = 0
-        new_video_index = 0
-        sampling_ratio = int(input_fps / output_fps)
-        expected_count = math.ceil(len(video) / int((input_fps / output_fps)))
-
-        for i in range(0, len(video), sampling_ratio):
-            frames = video[i:(i + sampling_ratio)]
-            new_frame = new_video[new_video_index]
-            test_frame = new_frame - np.mean(frames)
-            if not test_frame.any():
-                match_count += 1
-            new_video_index += 1
-        assert expected_count == match_count
+@pytest.mark.parametrize(("input_fps, output_fps, random_seed, strategy, "
+                          "expected_video"), [(10, 2, 10, 'random',
+                                              np.array([[[3, 2], [10, 7]],
+                                                        [[11, 1], [0, 5]]])),
+                                              (10, 2, 10, 'maximum',
+                                               np.array([[[5, 5], [10, 7]],
+                                                         [[11, 3], [12, 17]]])),
+                                              (10, 2, 10, 'average',
+                                               np.array([[[2.8, 2.6], [4.2, 3.6]],
+                                                         [[8.8, 2.4], [4.8, 6.2]]])),
+                                              (10, 2, 10, 'first',
+                                               np.array([[[5, 5], [5, 5]],
+                                                         [[11, 1], [0, 5]]])),
+                                              (10, 2, 10, 'last',
+                                               np.array([[[3, 2], [10, 7]],
+                                                         [[8, 3], [9, 0]]]))
+                                              ])
+def test_video_downsampling(input_fps, output_fps, random_seed, strategy,
+                            expected_video, video_fixture):
+    new_video = transformations._downsample_array(full_array=video_fixture,
+                                                  input_fps=input_fps,
+                                                  output_fps=output_fps,
+                                                  strategy=strategy,
+                                                  random_seed=random_seed)
+    assert np.array_equal(expected_video, new_video)
 
 
 @pytest.mark.parametrize(("coordinate_pair, window_size, video_shape,"
@@ -106,72 +65,66 @@ def test_coordinate_window_shift(coordinate_pair, window_size, video_shape,
     assert transformed_center == expected_pair
 
 
-@pytest.mark.parametrize(("coordinate_pair, window_size"),
-                         [((10, 10), (6, 6)),
-                          ((10, 10), (12, 12)),
-                          ((510, 510), (10, 10)),
-                          ((10, 510), (10, 10)),
-                          ((510, 10), (10, 10))])
-def test_video_subset_coord_pair(coordinate_pair, window_size):
-    current_path = (Path(__file__)).parent
-    video_path = current_path / 'resources' / 'test_video.h5'
-    with h5py.File(video_path, 'r') as open_h5:
-        video = open_h5['data'][:]
-        transformed_coordinates = transformations.get_transformed_center(coordinate_pair,
-                                                                         window_size,
-                                                                         video.shape)
-        left_column = transformed_coordinates[0] - math.ceil(window_size[0] / 2)
-        right_column = transformed_coordinates[0] + math.ceil(window_size[0] / 2)
-        up_row = transformed_coordinates[1] - math.ceil(window_size[1] / 2)
-        down_row = transformed_coordinates[1] + math.ceil(window_size[1] / 2)
+@pytest.mark.parametrize("coordinate_pair, window_size, frame_cnt, video_width,"
+                         "video_height",
+                         [((4, 4), (6, 6), 20, 512, 512),
+                          ((10, 10), (12, 12), 20, 512, 512),
+                          ((510, 510), (10, 10), 20, 512, 512),
+                          ((10, 510), (10, 10), 20, 512, 512),
+                          ((510, 10), (10, 10), 20, 512, 512)])
+def test_video_subset_coord_pair(coordinate_pair, window_size, frame_cnt,
+                                 video_width, video_height):
+    np.random.seed(0)
+    video = np.random.randint(0, 255, size=(frame_cnt, video_width,
+                                            video_height))
+    transformed_coordinates = transformations.get_transformed_center(coordinate_pair,
+                                                                     window_size,
+                                                                     video.shape)
+    left_column = transformed_coordinates[0] - math.ceil(window_size[0] / 2)
+    right_column = transformed_coordinates[0] + math.ceil(window_size[0] / 2)
+    up_row = transformed_coordinates[1] - math.ceil(window_size[1] / 2)
+    down_row = transformed_coordinates[1] + math.ceil(window_size[1] / 2)
 
-        # transform video
-        transformed_video = transformations.get_centered_coordinate_box(coordinate_pair,
-                                                                        window_size,
-                                                                        video)
-        # random sample frame to test subset
-        random_index = random.randint(0, 50)
-        random_transformed_frame = transformed_video[random_index]
-        random_regular_frame = video[random_index]
-        regular_subset = random_regular_frame[up_row:down_row,
-                                              left_column:right_column]
+    # transform video
+    transformed_video = transformations.get_centered_coordinate_box_video(coordinate_pair,
+                                                                          window_size,
+                                                                          video)
+    # random sample frame to test subset
+    random_index = random.randint(0, len(video) - 1)
+    random_transformed_frame = transformed_video[random_index]
+    random_regular_frame = video[random_index]
+    regular_subset = random_regular_frame[up_row:down_row,
+                                          left_column:right_column]
 
-        subtraction_frame = random_transformed_frame - regular_subset
-        assert not subtraction_frame.any()
+    assert np.array_equal(regular_subset, random_transformed_frame)
 
 
 def test_mp4_conversion(video_fixture):
-    with h5py.File(video_fixture, 'r') as open_video:
-        video = open_video['data'][:]
+    output_path = Path(__file__).parent
+    output_path = output_path / 'video.mp4'
 
-        norm_video = transformations.normalize_video(video)
-        output_path = video_fixture.parent
-        output_path = output_path / 'video.mp4'
+    norm_video = transformations.normalize_video(video_fixture)
 
-        transformations.transform_to_mp4(video=video,
-                                         output_path=output_path.as_posix())
+    transformations.transform_to_mp4(video=video_fixture,
+                                     output_path=output_path.as_posix())
 
-        frames = []
-        reader = imageio.get_reader(output_path.as_posix(), mode='I', fps=30,
-                                    size=(500, 500), pixelformat="gray")
-        for frame in reader:
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            frames.append(gray_frame)
-        frames = np.stack(frames)
+    frames = []
+    reader = imageio.get_reader(output_path.as_posix(), mode='I', fps=30,
+                                size=(2, 2), pixelformat="gray")
+    for frame in reader:
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        frames.append(gray_frame)
+    frames = np.stack(frames)
 
-        # codec for mp4 encoding changes the video slightly between h5 and mp4
-        # and vice versa, so numbers are not exactly the same. Instead general
-        # structure of video array loaded. Cv color conversion does not rectify
-        # this error unfortunately, this has been attempted and small errors
-        # persist
+    # codec for mp4 encoding changes the video slightly between h5 and mp4
+    # and vice versa, so numbers are not exactly the same. Instead general
+    # structure of video array loaded. Cv color conversion does not rectify
+    # this error unfortunately, this has been attempted and small errors
+    # persist
 
-        rand_idx = random.randint(0, 50)
+    random.seed(0)
+    rand_idx = random.randint(0, len(norm_video) - 1)
 
-        rand_frame = norm_video[rand_idx]
-        rand_test_frame = frames[rand_idx]
+    assert frames.shape == video_fixture.shape
 
-        subtraction_frame = rand_frame - rand_test_frame
-
-        assert frames.shape == video.shape
-
-        os.remove(output_path)
+    os.remove(output_path)
