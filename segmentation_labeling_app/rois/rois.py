@@ -1,6 +1,7 @@
 from typing import List, Tuple, Union
 
 from scipy.sparse import coo_matrix
+from scipy.spatial.distance import cdist
 import numpy as np
 import cv2
 
@@ -10,11 +11,18 @@ stroke_weight = 1.125
 
 
 class ROI:
-    """
-    This module is used for loading the ROIs from LIMs DB tables and
+    """Class is used for manipulating ROI from LIMs for serving to labeling app
+
+    This class is used for loading the ROIs from LIMs DB tables and
     contains pre processing methods for ROIs loaded from LIMs. These methods
     are used to define drawing parameters as well as other ROI class
     methods useful for post processing required to display to end user.
+    Attributes:
+        image_shape: the shape of the image the roi is contained within
+        segmentation_id: the unique id for the segmentation run
+        roi_id: the unique id for the ROI in the segmentation run
+        _sparse_coo: the sparse matrix containing the probability mask
+        for the ROI
     """
 
     def __init__(self,
@@ -31,7 +39,7 @@ class ROI:
                                       shape=image_shape)
 
     @classmethod
-    def roi_from_query(cls, segmentation_id:int,
+    def roi_from_query(cls, segmentation_id: int,
                        roi_id: int) -> "ROI":
         """
         Queries and builds ROI object by querying LIMS table for
@@ -67,14 +75,15 @@ class ROI:
                    segmentation_id=segmentation_id,
                    roi_id=roi_id)
 
-    def generate_binary_mask_from_threshold(self, threshold: float):
+    def generate_binary_mask_from_threshold(self, threshold: float) -> np.array:
         """
         Simple binary mask from a provided threshold.
         Args:
             threshold: The threshold to compare values
 
         Returns:
-
+            2D numpy array with values greater than threshold == 1 less than
+            threshold == 0
         Notes:
             This function will likely become deprecated as we work on more
             applicable binary thresh holding
@@ -105,33 +114,58 @@ class ROI:
         """
         edge_coordinates = self.get_edge_points(threshold=threshold)
         center = self.get_centroid_of_thresholded_mask(threshold=threshold)
-        inner_edge_mask = np.zeros(shape=self.image_shape)
-        for edge_coordinate in edge_coordinates[0]:
+        inner_edge_mask = np.zeros(self.image_shape)
+        distance_vectors = np.transpose(cdist(center, edge_coordinates, 'euclidean'))
+        vectors = np.array(list(zip(edge_coordinates, distance_vectors)))
+        for vector_pair in vectors:
             # get distance to center
-            vector = np.array([(center[0] - edge_coordinate[0][0]),
-                               (center[1] - edge_coordinate[0][1])])
-            vector_magnitude = np.linalg.norm(vector)
-            if vector_magnitude >= stroke_size:
-                unit_vector = vector / vector_magnitude
+            if vector_pair[1][0] >= stroke_size:
+                # get vector from edge to center
+                vector_from_center_to_edge = np.array([(center[0][0] - vector_pair[0][0]),
+                                                      (center[0][1] - vector_pair[0][1])])
+                # get unit vector
+                unit_vector = vector_from_center_to_edge / vector_pair[1][0]
                 """
                 This is a little iffy, you overweight the movement vector a
                 tiny bit, this is due to moving to much in one direction over the
                 other when you're not at a 45 degree angle from the center. So
                 we multiply it by a defined weight to overweight the movement
                 just slightly to compensate for imperfect stroke movement.
+                (with correct weighting)
+                x x x x x x     x x x x x x
+                x o o o o x     x x x x x x
+                x o o o o x     x x o o x x
+                x o o o o x - > x x o o x x
+                x o o o o x     x x x x x x
+                x x x x x x     x x x x x x
+                (without correct weighting)
+                x x x x x x     x x x x x x
+                x o o o o x     x x x o x x
+                x o o o o x     x x o o x x
+                x o o o o x - > x o o o x x
+                x o o o o x     x x x x x x
+                x x x x x x     x x x x x x
+                It's caused by some angles from center generating a unit vector
+                that is more pointed in one direction over the other, just under
+                the rounding value. So a unit vector will be (0.7, 0.44) and this
+                becomes (1, 0) when rounded, we want (1, 1) in order to eliminate
+                outer parts
                 """
+                # multiply unit vector by movement amount
                 movement_vector = stroke_weight * stroke_size * unit_vector
-                new_position_x = int(round(edge_coordinate[0][0] + movement_vector[0]))
-                new_position_y = int(round(edge_coordinate[0][1] + movement_vector[1]))
+                # create new position by adding movement vector a edge position
+                new_position_x = int(round(vector_pair[0][0] + movement_vector[0]))
+                new_position_y = int(round(vector_pair[0][1] + movement_vector[1]))
                 new_position_vec = np.array([new_position_x, new_position_y])
+                # add new position to mask by making value 1
                 inner_edge_mask[new_position_vec[0]][new_position_vec[1]] = 1
             else:
                 raise ValueError("Stroke size too large, cannot get inner edge "
                                  "coordinate with distance from center: "
-                                 "%i, and stroke size: %i" % (vector_magnitude, stroke_size))
-        # do edge finding again in case of inner edges existing
-        # don't use defined functions to preserve more simple structure
-        return inner_edge_mask, np.argwhere(inner_edge_mask == 1)
+                                 "%i, and stroke size: %i" % (vector_pair[1][0],
+                                                              stroke_size))
+        inner_edge_points = np.argwhere(inner_edge_mask == 1)
+        return inner_edge_points
 
     def get_edge_points(self, threshold: float):
         """
@@ -148,7 +182,7 @@ class ROI:
         contours, hierarchy = cv2.findContours(np.uint8(binary_mask),
                                                     cv2.RETR_TREE,
                                                     cv2.CHAIN_APPROX_NONE)
-        return contours
+        return np.squeeze(contours[0], axis=1)
 
     def get_centroid_of_thresholded_mask(self, threshold: float):
         """
@@ -167,4 +201,4 @@ class ROI:
         center_x = int(moments['m10'] / moments['m00'])
         center_y = int(moments['m01'] / moments['m00'])
 
-        return center_x, center_y
+        return np.array([[center_x, center_y]])
