@@ -2,3 +2,4 @@ pytest
 boto3
 moto
 argschema==2.0.1
+jsonlines
