@@ -1,11 +1,10 @@
+import json
+
+import sqlite3
 import pytest
 import numpy as np
-import json
-import os
-from pathlib import Path
 
 import segmentation_labeling_app.rois.rois as roi_module
-import segmentation_labeling_app.utils.query_utils as query_utils
 
 
 @pytest.mark.parametrize(("coo_rows, coo_cols, coo_data, video_shape,"
@@ -63,9 +62,9 @@ def test_edge_detection_edges(coo_rows, coo_cols, coo_data, video_shape,
                           ([1, 1, 1, 2, 2, 2, 2, 3, 3, 3],
                            [1, 2, 3, 0, 1, 2, 3, 1, 2, 3],
                            [0.75, 0.8, 0.9, 0.85, 0.75, 0.8, 0.82, 0.9, 0.85, 1],
-                           (5, 5), 1, 1, 0.7, np.array([[0, 0, 1, 0, 0],
-                                                        [0, 1, 0, 1, 0],
-                                                        [0, 1, 0, 1, 0],
+                           (5, 5), 1, 1, 0.7, np.array([[0, 0, 0, 0, 0],
+                                                        [0, 1, 1, 1, 0],
+                                                        [1, 0, 0, 1, 0],
                                                         [0, 1, 1, 1, 0],
                                                         [0, 0, 0, 0, 0]]))])
 def test_edge_detection_mask(coo_rows, coo_cols, coo_data, video_shape,
@@ -186,7 +185,7 @@ def test_roi_manifest_json(coo_rows, coo_cols, coo_data, video_shape,
 @pytest.mark.parametrize(("coo_rows, coo_cols, coo_data, video_shape,"
                           "segmentation_id, roi_id, transform_hash,"
                           "ophys_segmentation_commit_hash, creation_date,"
-                          "upload_date, manifest_json"), [
+                          "upload_date, manifest"), [
     ([0, 0, 1, 1], [0, 1, 0, 1],
      [0.75, 0.8, 0.9, 0.85], (3, 3), 1, 1, 'test_hash', 'test_hash',
      'test_date', 'test_date', json.dumps('test_manifest'))
@@ -194,21 +193,21 @@ def test_roi_manifest_json(coo_rows, coo_cols, coo_data, video_shape,
 def test_roi_db_table_write(coo_rows, coo_cols, coo_data, video_shape,
                             segmentation_id, roi_id, transform_hash,
                             ophys_segmentation_commit_hash, creation_date,
-                            upload_date, manifest_json):
+                            upload_date, manifest, tmp_path):
     test_roi = roi_module.ROI(coo_rows, coo_cols, coo_data,
                               video_shape, segmentation_id, roi_id)
-    database_file = Path(__file__).parent / 'test_db.db'
+    database_file = tmp_path / 'test_db.db'
 
     _ = test_roi.write_roi_to_db(database_file,
                                  transform_hash=transform_hash,
                                  ophys_segmentation_commit_hash=ophys_segmentation_commit_hash,
                                  creation_date=creation_date,
                                  upload_date=upload_date,
-                                 manifest_json=manifest_json)
+                                 manifest=manifest)
 
-    db_connection = query_utils.create_connection_sqlite(database_file)
+    db_connection = sqlite3.connect(database_file.as_posix())
     curr = db_connection.cursor()
-    curr.execute("SELECT * FROM rois")
+    curr.execute("SELECT * FROM rois_prelabeling")
     rois = curr.fetchall()
     db_roi = rois[0]
 
@@ -216,10 +215,6 @@ def test_roi_db_table_write(coo_rows, coo_cols, coo_data, video_shape,
     assert db_roi[2] == ophys_segmentation_commit_hash
     assert db_roi[3] == creation_date
     assert db_roi[4] == upload_date
-    assert db_roi[5] == manifest_json
+    assert db_roi[5] == manifest
     assert db_roi[6] == test_roi.experiment_id
     assert db_roi[7] == test_roi.roi_id
-
-    db_connection.close()
-
-    os.remove(database_file)
