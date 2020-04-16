@@ -56,8 +56,7 @@ def test_LabelDataUploader(populated_db, bucket, timestamp):
             'sql_table': 'manifest_table',
             'sql_filter': "",
             'timestamp': timestamp,
-            'contents_prefix': 'abc/def',
-            'manifest_write_mode': 'w'
+            'prefix': 'abc/def',
             }
     ldu = up.LabelDataUploader(input_data=args, args=[])
     ldu.run()
@@ -82,7 +81,7 @@ def test_LabelDataUploader(populated_db, bucket, timestamp):
     # s3 should have all the files, + 1 manifest
     assert len(files_in_s3) == (len(files_in_db) + 1)
 
-    # s3 shuld have every file that the db has
+    # s3 should have every file that the db has
     s3_basenames = [
             os.path.basename(f)
             for f in files_in_s3
@@ -90,7 +89,7 @@ def test_LabelDataUploader(populated_db, bucket, timestamp):
     assert set(s3_basenames) == set(files_in_db)
 
     # s3 prefix should match an expectation
-    expected = args['contents_prefix']
+    expected = args['prefix']
     if timestamp:
         expected += '/' + ldu.timestamp
     for f in files_in_s3:

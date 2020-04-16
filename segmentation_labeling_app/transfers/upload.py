@@ -1,5 +1,4 @@
 import argschema
-import marshmallow as mm
 import datetime
 import tempfile
 import segmentation_labeling_app.transfers.utils as utils
@@ -21,27 +20,11 @@ class UploadSchema(argschema.ArgSchema):
     s3_bucket_name = argschema.fields.Str(
         required=True,
         description="destination bucket name")
-    contents_prefix = argschema.fields.Str(
+    prefix = argschema.fields.Str(
         required=False,
         default="",
         missing="",
-        description="key prefix for manifest contents")
-    manifest_prefix = argschema.fields.Str(
-        required=False,
-        allow_none=True,
-        default=None,
-        missing=None,
-        description=("key prefix for manifest. Will default "
-                     "to contents_prefix"))
-    manifest_write_mode = argschema.fields.Str(
-        required=False,
-        allow_none=True,
-        default=None,
-        missing=None,
-        validator=mm.validate.OneOf(['w', 'a', None]),
-        description=("truncate ('w') or append ('a') an existing "
-                     "manifest file in destination bucket. None "
-                     "also accepted for non-existing files."))
+        description="key prefix for manifest and contents")
     timestamp = argschema.fields.Bool(
         required=False,
         missing=True,
@@ -63,29 +46,24 @@ class LabelDataUploader(argschema.ArgSchemaParser):
                 sql_filter=self.args['sql_filter'])
 
         # upload the per-ROI manifests
-        contents_prefix = self.args['contents_prefix']
+        prefix = self.args['prefix']
         if self.args['timestamp']:
-            contents_prefix += '/' + self.timestamp
+            prefix += '/' + self.timestamp
         s3_manifests = []
         for manifest in manifests:
             s3_manifests.append(
                 utils.upload_manifest_contents(
                     manifest,
                     self.args['s3_bucket_name'],
-                    contents_prefix))
+                    prefix))
 
-        # upload the overall manifest
-        manifest_prefix = self.args['manifest_prefix']
-        if manifest_prefix is None:
-            manifest_prefix = contents_prefix
-
+        # upload the manifest
         tfile = tempfile.NamedTemporaryFile()
         utils.manifest_file_from_jsons(tfile.name, s3_manifests)
-        utils.upload_manifest(
+        utils.upload_file(
                 tfile.name,
                 self.args['s3_bucket_name'],
-                manifest_prefix + f"/{self.timestamp}_manifest.jsonl",
-                mode=self.args['manifest_write_mode'])
+                key=prefix + "/manifest.jsonl")
         tfile.close()
 
 

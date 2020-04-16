@@ -100,60 +100,6 @@ def upload_file(file_name, bucket, key=None, skipcheck=False):
     return s3_uri
 
 
-class UploadManifestException(Exception):
-    pass
-
-
-def upload_manifest(file_name, bucket, key, mode=None):
-    """upload or update an S3 manifest
-
-    Parameters
-    ----------
-    file_name: path-like object
-        full path to local file
-    bucket: str
-        name of bucket
-    key: str
-        object key
-    mode : str
-        'w' (truncate & write) or 'a' (append) for an existing file
-
-    Returns
-    -------
-    s3_uri : str
-        URI to S3 object just uploaded
-    """
-
-    exists = object_exists(bucket, key)
-
-    if exists & (mode not in ['w', 'a']):
-        # specify a correct way to handle existing object
-        raise UploadManifestException(
-                f"s3://{bucket}/{key} exists"
-                "specify mode='a' or 'w'")
-
-    if (not exists) | (mode == 'w'):
-        # new file, or truncate and write
-        s3_uri = upload_file(file_name, bucket, key=key)
-
-    else:
-        # append
-        tfile = tempfile.NamedTemporaryFile()
-        boto3.client('s3').download_file(bucket, key, tfile.name)
-        with open(tfile.name, "r") as fp:
-            lines = fp.readlines()
-        tfile.close()
-        with open(file_name, "r") as fp:
-            lines.extend(fp.readlines())
-        tfile = tempfile.NamedTemporaryFile()
-        with open(tfile.name, "w") as fp:
-            fp.writelines(lines)
-        s3_uri = upload_file(tfile.name, bucket, key=key)
-        tfile.close()
-
-    return s3_uri
-
-
 def upload_manifest_contents(local_manifest, bucket, prefix):
     """upload the contents of a manifest, returning a copy with
     updated S3 URIs

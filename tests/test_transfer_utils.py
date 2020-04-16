@@ -7,7 +7,6 @@ from moto import mock_s3
 import pathlib
 import numpy as np
 import string
-import filecmp
 
 
 @pytest.fixture(scope='module')
@@ -165,40 +164,3 @@ def test_manifest_file_from_jsons(list_of_dicts, tmpdir_factory):
                 set(list((list_of_dicts[i].keys()))))
         for key in read_json.keys():
             assert read_json[key] == list_of_dicts[i][key]
-
-
-def test_upload_manifest(list_of_dicts, bucket, tmpdir_factory):
-    tdir = tmpdir_factory.mktemp("manifest_upload_test")
-    local_manifest = tdir.join("manifest.jsonl")
-    utils.manifest_file_from_jsons(str(local_manifest), list_of_dicts)
-
-    key = "datetime/manifest.jsonl"
-
-    # upload manifest
-    s3_uri = utils.upload_manifest(str(local_manifest), bucket, key)
-    # download and compare
-    downloaded_manifest = tdir.join('downloaded_manifest.jsonl')
-    boto3.client('s3').download_file(bucket, key, str(downloaded_manifest))
-    assert filecmp.cmp(local_manifest, downloaded_manifest)
-
-    with pytest.raises(utils.UploadManifestException):
-        s3_uri = utils.upload_manifest(str(local_manifest), bucket, key)
-
-    # upload manifest and overwrite
-    s3_uri = utils.upload_manifest(str(local_manifest), bucket, key, mode='w')
-    # download and compare
-    downloaded_manifest = tdir.join('downloaded_manifest.jsonl')
-    boto3.client('s3').download_file(bucket, key, str(downloaded_manifest))
-    assert filecmp.cmp(local_manifest, downloaded_manifest)
-
-    # upload manifest and append
-    utils.upload_manifest(str(local_manifest), bucket, key, mode='a')
-    # download and compare
-    downloaded_manifest = tdir.join('downloaded_manifest.jsonl')
-    boto3.client('s3').download_file(bucket, key, str(downloaded_manifest))
-    local_double = tdir.join("manifest_twice.jsonl")
-    with open(local_manifest, "r") as fp:
-        lines = fp.readlines()
-    with open(local_double, "w") as fp:
-        fp.writelines(lines + lines)
-    assert filecmp.cmp(local_double, downloaded_manifest)
