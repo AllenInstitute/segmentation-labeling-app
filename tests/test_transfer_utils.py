@@ -73,6 +73,25 @@ def test_object_exists(local_file, bucket, expected):
     assert exists == expected
 
 
+def test_local_s3_compare(local_file, bucket, tmpdir_factory):
+    key = "mykey"
+    utils.upload_file(local_file, bucket, key=key)
+
+    # object and file are same
+    assert utils.local_s3_compare(local_file, bucket, key)
+
+    # object does not exist in bucket
+    with pytest.raises(utils.S3TransferException):
+        utils.local_s3_compare(local_file, bucket, "not/a/key")
+
+    # bucket object and file are different
+    tfile = tmpdir_factory.mktemp('compare_stuff').join("junk.txt")
+    with open(str(tfile), "w") as fp:
+        fp.write("junk contents")
+    with pytest.raises(utils.S3TransferException):
+        utils.local_s3_compare(str(tfile), bucket, key)
+
+
 @pytest.mark.parametrize("key", ["abc/temp.csv", None])
 def test_upload_file(local_file, bucket, key):
     bucket_path = utils.upload_file(local_file, bucket, key=key)
@@ -173,7 +192,7 @@ def test_upload_manifest(list_of_dicts, bucket, tmpdir_factory):
     assert filecmp.cmp(local_manifest, downloaded_manifest)
 
     # upload manifest and append
-    s3_uri = utils.upload_manifest(str(local_manifest), bucket, key, mode='a')
+    utils.upload_manifest(str(local_manifest), bucket, key, mode='a')
     # download and compare
     downloaded_manifest = tdir.join('downloaded_manifest.jsonl')
     boto3.client('s3').download_file(bucket, key, str(downloaded_manifest))

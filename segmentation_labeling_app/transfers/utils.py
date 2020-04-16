@@ -5,36 +5,15 @@ import sqlite3
 import json
 import jsonlines
 import tempfile
+import filecmp
 
 
-def upload_file(file_name, bucket, key=None):
-    """Upload a file to an S3 bucket
-
-    Parameters
-    ----------
-    file_name: path-like object
-        full path to local file
-    bucket: str
-        name of bucket
-    key: str
-        object key. If not passed, object key will be
-        basename of the file_name
-
-    Returns
-    -------
-    s3_uri : str
-        URI to S3 object just uploaded
+class S3TransferException(Exception):
+    pass
 
 
-    """
-    if key is None:
-        key = pathlib.PurePath(file_name).name
-
-    client = boto3.client('s3')
-    client.upload_file(file_name, bucket, key)
-
+def s3_uri(bucket, key):
     s3_uri = 's3://' + bucket + '/' + key
-
     return s3_uri
 
 
@@ -62,6 +41,63 @@ def object_exists(bucket, key):
     except ClientError as exc:
         pass
     return exists
+
+
+def local_s3_compare(file_name, bucket, key):
+    uri = s3_uri(bucket, key)
+    client = boto3.client('s3')
+
+    try:
+        assert object_exists(bucket, key)
+    except AssertionError:
+        raise S3TransferException(f"{uri} does not exist")
+    try:
+        tfile = tempfile.NamedTemporaryFile()
+        client.download_file(bucket, key, tfile.name)
+        assert filecmp.cmp(file_name, tfile.name)
+    except AssertionError:
+        raise S3TransferException(
+                f"destination object {uri} does not match "
+                f"source file {file_name}")
+    finally:
+        tfile.close()
+
+    return True
+
+
+def upload_file(file_name, bucket, key=None, skipcheck=False):
+    """Upload a file to an S3 bucket
+
+    Parameters
+    ----------
+    file_name: path-like object
+        full path to local file
+    bucket: str
+        name of bucket
+    key: str
+        object key. If not passed, object key will be
+        basename of the file_name
+    skipcheck: bool
+        whether to skip the roundtrip check. Could be useful
+        in non-critical moments for large files
+
+    Returns
+    -------
+    s3_uri : str
+        URI to S3 object just uploaded
+
+    """
+    if key is None:
+        key = pathlib.PurePath(file_name).name
+
+    client = boto3.client('s3')
+    client.upload_file(file_name, bucket, key)
+    s3_uri = 's3://' + bucket + '/' + key
+
+    if not skipcheck:
+        assert local_s3_compare(file_name, bucket, key)
+
+    return s3_uri
 
 
 class UploadManifestException(Exception):
