@@ -1,13 +1,10 @@
 from typing import List, Tuple, Union
 
 from scipy.sparse import coo_matrix
-from scipy.spatial.distance import cdist
 import numpy as np
 import cv2
 
 import segmentation_labeling_app.utils.query_utils as query_utils
-
-stroke_weight = 1.125
 
 
 class ROI:
@@ -90,115 +87,76 @@ class ROI:
         """
         return np.where(self._sparse_coo.toarray() >= threshold, 1, 0)
 
-    def generate_roi_inner_edge_coordinates(self, stroke_size: int,
-                                            threshold: float):
+    def create_dilated_contour_mask(self, stroke_size: int,
+                                    threshold: float) -> np.array:
         """
-        Returns a list of coordinates in a video frame for the inner outline
-        of an ROI given a desired stroke size. Looks at each border pixel and
-        moves away from edge by stroke specified pixels. This process is completed
-        by defining the center of the roi and creating a unit vector from the
-        center to the edge point. This unit vector is then multiplied by the stroke
-        and a slight weight to correct for non int centers. The movement vector
-        is added to the edge point and the new point is then set to true in
-        the return mask.
+        Returns a mask for a stroke size and threshold. An edge mask is
+        calculated from the threshold. This mask is then dilated with dilation
+        iterations for all values from 0 to stroke_size. All but the edges
+        are masked away and added to the previous edge mask.
+        This mask is then binarized where each pixel above or equal to 1
+        becomes 1. This produces a border of size stroke_size around the
+        original edge mask.
         Args:
             stroke_size: Value in pixels for the size of the stroke
             threshold: Float to threshold every pixel against to generate
             binary mask
 
         Returns:
-            eroded_inner_mask: A binary mask for the new edge coordinates
-            that has been slightly eroded
-            coordinate_list: A list of coordinates for the edge of the ROI
-            pushed in by stroke pixel count
+            final_mask: the edge binary mask around the ROI where 1 is border
+            and 0 is non border
         """
-        edge_coordinates = self.get_edge_points(threshold=threshold)
-        center = self.get_centroid_of_thresholded_mask(threshold=threshold)
-        inner_edge_mask = np.zeros(self.image_shape)
-        distance_vectors = np.transpose(cdist(center, edge_coordinates, 'euclidean'))
-        vectors = np.array(list(zip(edge_coordinates, distance_vectors)))
-        for vector_pair in vectors:
-            # get distance to center
-            if vector_pair[1][0] >= stroke_size:
-                # get vector from edge to center
-                vector_from_center_to_edge = np.array([(center[0][0] - vector_pair[0][0]),
-                                                      (center[0][1] - vector_pair[0][1])])
-                # get unit vector
-                unit_vector = vector_from_center_to_edge / vector_pair[1][0]
-                """
-                This is a little iffy, you overweight the movement vector a
-                tiny bit, this is due to moving to much in one direction over the
-                other when you're not at a 45 degree angle from the center. So
-                we multiply it by a defined weight to overweight the movement
-                just slightly to compensate for imperfect stroke movement.
-                (with correct weighting)
-                x x x x x x     x x x x x x
-                x o o o o x     x x x x x x
-                x o o o o x     x x o o x x
-                x o o o o x - > x x o o x x
-                x o o o o x     x x x x x x
-                x x x x x x     x x x x x x
-                (without correct weighting)
-                x x x x x x     x x x x x x
-                x o o o o x     x x x o x x
-                x o o o o x     x x o o x x
-                x o o o o x - > x o o o x x
-                x o o o o x     x x x x x x
-                x x x x x x     x x x x x x
-                It's caused by some angles from center generating a unit vector
-                that is more pointed in one direction over the other, just under
-                the rounding value. So a unit vector will be (0.7, 0.44) and this
-                becomes (1, 0) when rounded, we want (1, 1) in order to eliminate
-                outer parts
-                """
-                # multiply unit vector by movement amount
-                movement_vector = stroke_weight * stroke_size * unit_vector
-                # create new position by adding movement vector a edge position
-                new_position_x = int(round(vector_pair[0][0] + movement_vector[0]))
-                new_position_y = int(round(vector_pair[0][1] + movement_vector[1]))
-                new_position_vec = np.array([new_position_x, new_position_y])
-                # add new position to mask by making value 1
-                inner_edge_mask[new_position_vec[0]][new_position_vec[1]] = 1
-            else:
-                raise ValueError("Stroke size too large, cannot get inner edge "
-                                 "coordinate with distance from center: "
-                                 "%i, and stroke size: %i" % (vector_pair[1][0],
-                                                              stroke_size))
-        inner_edge_points = np.argwhere(inner_edge_mask == 1)
-        return inner_edge_points
+        edge_mask = self.get_edge_mask(threshold=threshold)
+        final_mask = np.zeros(self.image_shape)
+        dilation_kernel = cv2.getStructuringElement(cv2.MORPH_RECT,
+                                                    ksize=(3, 3))
+        for i in range(0, stroke_size):
+            dilated_mask = cv2.dilate(edge_mask, dilation_kernel,
+                                      iterations=i)
+            dilated_mask = self.get_edge_mask(threshold=1,
+                                              optional_array=dilated_mask)
+            final_mask = final_mask + dilated_mask
+        return np.where(final_mask >= 1, 1, 0)
 
-    def get_edge_points(self, threshold: float):
+    def get_edge_points(self, threshold: float,
+                        optional_array: np.array = None):
+        """
+        Returns a list of edge points. Computes edges using binary erosion and
+        exclusive or operation. Generates edges from a thresholded binary mask.
+        Args:
+            threshold: a float to threshold all values against to create binary
+                       mask
+            optional_array: an optional array to overload the function and
+            create edge points from different mask
+        Returns:
+            Contours: a list of coordinates that contain edge points
+        """
+        if optional_array is None:
+            optional_array = self.generate_binary_mask_from_threshold(threshold)
+        contours, hierarchy = cv2.findContours(np.uint8(optional_array),
+                                               cv2.RETR_TREE,
+                                               cv2.CHAIN_APPROX_NONE)
+        return np.squeeze(contours[0], axis=1)
+
+    def get_edge_mask(self, threshold: float,
+                      optional_array: np.array = None) -> np.array:
         """
         Returns a mask of edge points where edges of an roi are represented
         as 1 and non edges are 0. Computes edges using binary erosion and
         exclusive or operation. Generates edges from a thresholded binary mask.
         Args:
             threshold: a float to threshold all values against to create binary
-            mask
+                       mask
+            optional_array: an optional array to overload the function and
+            create edge points from different mask
+
         Returns:
-            Contours: a list of coordinates that contain edge points
-        """
-        binary_mask = self.generate_binary_mask_from_threshold(threshold)
-        contours, hierarchy = cv2.findContours(np.uint8(binary_mask),
-                                                    cv2.RETR_TREE,
-                                                    cv2.CHAIN_APPROX_NONE)
-        return np.squeeze(contours[0], axis=1)
+            mask_matrix: a binary mask of the edges given a threshold
 
-    def get_centroid_of_thresholded_mask(self, threshold: float):
         """
-        Returns a tuple containing the center x and center y of an
-        object in 2d picture. Calculates the moments of the image and
-        uses the ratios to calculate the center.
-        Args:
-            threshold: Float to threshold pixels against to create binary mask
-        Returns:
-            tuple[c_x, c_y], a tuple containing the center of the roi from the
-            thresholded binary mask
-        """
-        threshold_mask = self.generate_binary_mask_from_threshold(threshold)
-        moments = cv2.moments(np.float32(threshold_mask))
-
-        center_x = int(moments['m10'] / moments['m00'])
-        center_y = int(moments['m01'] / moments['m00'])
-
-        return np.array([[center_x, center_y]])
+        edge_coordinates = self.get_edge_points(threshold=threshold,
+                                                optional_array=optional_array)
+        mask_matrix = np.zeros(shape=self.image_shape)
+        for edge_coordinate in edge_coordinates:
+            mask_matrix[edge_coordinate[0]][edge_coordinate[1]] = 1
+        return mask_matrix
