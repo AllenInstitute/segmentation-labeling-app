@@ -103,13 +103,14 @@ def test_mp4_conversion(video_fixture):
     output_path = Path(__file__).parent
     output_path = output_path / 'video.mp4'
 
-    norm_video = transformations.normalize_video(video_fixture)
+    fps = 30
 
     transformations.transform_to_mp4(video=video_fixture,
-                                     output_path=output_path.as_posix())
+                                     output_path=output_path.as_posix(),
+                                     fps=fps),
 
     frames = []
-    reader = imageio.get_reader(output_path.as_posix(), mode='I', fps=30,
+    reader = imageio.get_reader(output_path.as_posix(), mode='I', fps=fps,
                                 size=(2, 2), pixelformat="gray")
     for frame in reader:
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
@@ -121,9 +122,6 @@ def test_mp4_conversion(video_fixture):
     # structure of video array loaded. Cv color conversion does not rectify
     # this error unfortunately, this has been attempted and small errors
     # persist
-
-    random.seed(0)
-    rand_idx = random.randint(0, len(norm_video) - 1)
 
     assert frames.shape == video_fixture.shape
 
