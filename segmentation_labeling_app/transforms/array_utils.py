@@ -64,6 +64,7 @@ def center_pad_2d(arr: np.ndarray, shape: Tuple[int, int],
     if (img_size[0] > shape[0]) or (img_size[1] > shape[1]):
         logging.warning("Specified shape after padding is too small. "
                         "Returning input array without padding.")
+        return arr
 
     if vertical_pad % 2 == 0:
         top_pad = bottom_pad = int(vertical_pad / 2)
