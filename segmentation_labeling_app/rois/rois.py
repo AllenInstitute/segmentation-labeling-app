@@ -1,10 +1,28 @@
 from typing import List, Tuple, Union
+import json
+from pathlib import Path
 
 from scipy.sparse import coo_matrix
 import numpy as np
 import cv2
 
 import segmentation_labeling_app.utils.query_utils as query_utils
+
+
+sql_create_rois_table = """ CREATE TABLE IF NOT EXISTS rois (
+                            id integer PRIMARY KEY,
+                            transform_hash text NOT NULL,
+                            ophys_segmentation_commit_hash text NOT NULL,
+                            creation_date text NOT NULL,
+                            upload_date text,
+                            manifest_json text NOT NULL,
+                            experiment_id integer NOT NULL,
+                            roi_id integer NOT NULL);"""
+
+sql_insert_roi = """ INSERT INTO rois (transform_hash, ophys_segmentation_commit_hash,
+                     creation_date, upload_date, manifest_json, experiment_id,
+                     roi_id) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?) """
 
 
 class ROI:
@@ -16,7 +34,7 @@ class ROI:
     methods useful for post processing required to display to end user.
     Attributes:
         image_shape: the shape of the image the roi is contained within
-        segmentation_id: the unique id for the segmentation run
+        experiment_id: the unique id for the segmentation run
         roi_id: the unique id for the ROI in the segmentation run
         _sparse_coo: the sparse matrix containing the probability mask
         for the ROI
@@ -27,22 +45,22 @@ class ROI:
                  coo_cols: Union[np.array, List[int]],
                  coo_data: Union[np.array, List[float]],
                  image_shape: Tuple[int, int],
-                 segmentation_id: int,
+                 experiment_id: int,
                  roi_id: int):
         self.image_shape = image_shape
-        self.segmentation_id = segmentation_id
+        self.experiment_id = experiment_id
         self.roi_id = roi_id
         self._sparse_coo = coo_matrix((coo_data, (coo_rows, coo_cols)),
                                       shape=image_shape)
 
     @classmethod
-    def roi_from_query(cls, segmentation_id: int,
+    def roi_from_query(cls, experiment_id: int,
                        roi_id: int) -> "ROI":
         """
         Queries and builds ROI object by querying LIMS table for
         produced labeling ROIs.
         Args:
-            segmentation_id: Id of the segmentation run
+            experiment_id: Id of the segmentation run
             roi_id: Unique Id of the ROI to be loaded
 
         Returns: ROI object for the given segmentation_id and roi_id
@@ -50,7 +68,7 @@ class ROI:
         label_vars = query_utils.get_labeling_env_vars()
 
         shape = query_utils.query(
-            f"SELECT * FROM public.segmentation_runs WHERE id={segmentation_id}",
+            f"SELECT * FROM public.segmentation_runs WHERE id={experiment_id}",
             user=label_vars.user,
             host=label_vars.host,
             database=label_vars.database,
@@ -59,7 +77,7 @@ class ROI:
 
         roi = query_utils.query(
             f"SELECT * FROM public.rois WHERE "
-            f"segmentation_run_id={segmentation_id} AND id={roi_id}",
+            f"segmentation_run_id={experiment_id} AND id={roi_id}",
             user=label_vars.user,
             host=label_vars.host,
             database=label_vars.database,
@@ -69,7 +87,7 @@ class ROI:
                    coo_cols=roi['coo_cols'][0],
                    coo_data=roi['coo_data'][0],
                    image_shape=shape,
-                   segmentation_id=segmentation_id,
+                   experiment_id=experiment_id,
                    roi_id=roi_id)
 
     def generate_binary_mask_from_threshold(self, threshold: float) -> np.array:
@@ -106,8 +124,8 @@ class ROI:
             final_mask: the edge binary mask around the ROI where 1 is border
             and 0 is non border
         """
+        final_mask = np.zeros(shape=self.image_shape)
         edge_mask = self.get_edge_mask(threshold=threshold)
-        final_mask = np.zeros(self.image_shape)
         dilation_kernel = cv2.getStructuringElement(cv2.MORPH_RECT,
                                                     ksize=(3, 3))
         for i in range(0, stroke_size):
@@ -116,7 +134,7 @@ class ROI:
             dilated_mask = self.get_edge_mask(threshold=1,
                                               optional_array=dilated_mask)
             final_mask = final_mask + dilated_mask
-        return np.where(final_mask >= 1, 1, 0)
+        return final_mask
 
     def get_edge_points(self, threshold: float,
                         optional_array: np.array = None):
@@ -160,3 +178,53 @@ class ROI:
         for edge_coordinate in edge_coordinates:
             mask_matrix[edge_coordinate[0]][edge_coordinate[1]] = 1
         return mask_matrix
+
+    def create_manifest_json(self, source_ref: str,
+                             video_source_ref: str, max_source_ref: str,
+                             avg_source_ref: str, trace_source_ref: str,
+                             roi_data_source_ref: str) -> str:
+        """
+        Function to make the manifest json string required for sagemaker
+        ground truth to read the data in successfully. The strings are
+        S3 bucket URIs for each of the required data.
+        Args:
+            source_ref: Location of ROI mask png
+            video_source_ref: Location of 2P video for the ROI
+            max_source_ref: Location of the maximum projection for the ROI
+            avg_source_ref: Location of the average projection for the ROI
+            trace_source_ref: Location of the trace data for the ROI
+            roi_data_source_ref: Location of the ROI coordinate data
+
+        Returns:
+            dictionary: returns dictionary as binary json string
+        """
+        dictionary = {'source_ref': source_ref,
+                      'video_source_ref': video_source_ref,
+                      'max_source_ref': max_source_ref,
+                      'avg_source_ref': avg_source_ref,
+                      'trace_source_ref': trace_source_ref,
+                      'roi_data_source-ref': roi_data_source_ref,
+                      'roi_id': self.roi_id,
+                      'experiment_id': self.experiment_id}
+        return json.dumps(dictionary)
+
+    def write_roi_to_db(self, database_file_path: Path,
+                        transform_hash: str,
+                        ophys_segmentation_commit_hash: str,
+                        creation_date: str,
+                        manifest_json: str,
+                        upload_date: str = None):
+        # connect to the database file
+        db_connection = query_utils.create_connection_sqlite(database_file_path.as_posix())
+
+        # create table, sql query handles the checking if already exists
+        query_utils.create_table_sqlite(db_connection, sql_create_rois_table)
+
+        roi_task = (transform_hash, ophys_segmentation_commit_hash,
+                    creation_date, upload_date, manifest_json,
+                    self.experiment_id, self.roi_id)
+        # add the roi to the table
+        unique_id = query_utils.insert_into_sqlite_table(db_connection,
+                                                         sql_insert_roi,
+                                                         roi_task)
+        return unique_id

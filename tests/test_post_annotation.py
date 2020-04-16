@@ -1,8 +1,5 @@
-from pathlib import Path
-import os
 import pytest
 import json
-from urllib.parse import urlparse
 
 import boto3
 from moto import (mock_s3)
