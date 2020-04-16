@@ -147,12 +147,12 @@ def upload_manifest_contents(local_manifest, bucket, prefix):
     return s3_manifest
 
 
-def get_manifests_from_db(sqlite_db_path, sql_table, sql_filter=""):
+def get_manifests_from_db(sqlite_db_file, sql_table, sql_filter=""):
     """get back a list of manifests, as jsons
 
     Parameters
     ----------
-    sqlite_db_path: path-like object
+    sqlite_db_file: path-like object
         passed to sqlite3.connect()
     sql_table: str
         table to query
@@ -165,7 +165,7 @@ def get_manifests_from_db(sqlite_db_path, sql_table, sql_filter=""):
         each element of the list is a manifest dictionary
 
     """
-    conn = sqlite3.connect(sqlite_db_path)
+    conn = sqlite3.connect(sqlite_db_file)
     query_string = f"SELECT manifest FROM {sql_table} {sql_filter}"
     results = [json.loads(result[0]) for result in conn.execute(query_string)]
     conn.close()
