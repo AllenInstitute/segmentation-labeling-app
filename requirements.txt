@@ -4,3 +4,6 @@ moto
 numpy
 scipy
 ipywidgets
+matplotlib
+psycopg2-binary
+pandas
