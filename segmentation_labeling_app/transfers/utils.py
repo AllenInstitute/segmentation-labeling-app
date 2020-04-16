@@ -13,8 +13,8 @@ class S3TransferException(Exception):
 
 
 def s3_uri(bucket, key):
-    s3_uri = 's3://' + bucket + '/' + key
-    return s3_uri
+    uri = 's3://' + bucket + '/' + key
+    return uri
 
 
 def object_exists(bucket, key):
@@ -83,7 +83,7 @@ def upload_file(file_name, bucket, key=None, skipcheck=False):
 
     Returns
     -------
-    s3_uri : str
+    uri : str
         URI to S3 object just uploaded
 
     """
@@ -92,12 +92,12 @@ def upload_file(file_name, bucket, key=None, skipcheck=False):
 
     client = boto3.client('s3')
     client.upload_file(file_name, bucket, key)
-    s3_uri = 's3://' + bucket + '/' + key
+    uri = s3_uri(bucket, key)
 
     if not skipcheck:
         assert local_s3_compare(file_name, bucket, key)
 
-    return s3_uri
+    return uri
 
 
 def upload_manifest_contents(local_manifest, bucket, prefix):
