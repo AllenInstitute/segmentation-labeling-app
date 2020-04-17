@@ -69,7 +69,8 @@ def crop_2d_array(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:
 
 
 def center_pad_2d(arr: np.ndarray, shape: Tuple[int, int],
-                  value: Type[np.dtype] = 0) -> np.ndarray:
+                  value: Type[np.dtype] = 0,
+                  allow_overflow: bool = True) -> np.ndarray:
     """
     Add padding around a numpy array such that the original array data
     stays in the center. If padding cannot be evenly applied due to the
@@ -85,6 +86,9 @@ def center_pad_2d(arr: np.ndarray, shape: Tuple[int, int],
         without any changes.
     value: (inherit from np.dtype) Any valid numpy dtype value. Should
         be homogenous with the input array.
+    allow_overflow: (bool) If true, will return array unchanged if the
+        array size is larger than the value for `shape`. If false,
+        will return None instead.
     """
     if arr.size == 0:
         return np.full(shape, value)
@@ -95,7 +99,10 @@ def center_pad_2d(arr: np.ndarray, shape: Tuple[int, int],
     if (img_size[0] > shape[0]) or (img_size[1] > shape[1]):
         logging.warning("Specified shape after padding is too small. "
                         "Returning input array without padding.")
-        return arr
+        if allow_overflow:
+            return arr
+        else:
+            return None
 
     if vertical_pad % 2 == 0:
         top_pad = bottom_pad = int(vertical_pad / 2)

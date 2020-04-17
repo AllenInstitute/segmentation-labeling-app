@@ -86,12 +86,13 @@ def test_crop_array_raises_error(arr):
 
 
 @pytest.mark.parametrize(
-    "arr,shape,value,expected",
+    "arr,shape,value,allow_overflow,expected",
     [
         (   # Can perfectly center, unit value
             np.array([[1]]),
             (3, 3),
             99,
+            True,
             np.array([[99, 99, 99],
                       [99, 1, 99],
                       [99, 99, 99]]),
@@ -100,6 +101,7 @@ def test_crop_array_raises_error(arr):
             np.array([[1], [2]]),
             (3, 4),
             0,
+            True,
             np.array([[0, 1, 0, 0],
                       [0, 2, 0, 0],
                       [0, 0, 0, 0]]),
@@ -108,10 +110,25 @@ def test_crop_array_raises_error(arr):
             np.zeros((0, 0)),
             (4, 4),
             1,
+            True,
             np.ones((4, 4)),
         ),
+        (   # Too big, let it go
+            np.ones((5, 5)),
+            (4, 4),
+            0,
+            True,
+            np.ones((5, 5))
+        ),
+        (   # Too big, no-go
+            np.ones((5, 5)),
+            (4, 4),
+            0,
+            False,
+            None
+        )
     ]
 )
-def test_center_pad_2d(arr, shape, value, expected):
-    np.testing.assert_array_equal(expected,
-                                  au.center_pad_2d(arr, shape, value))
+def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
+    np.testing.assert_equal(
+        expected, au.center_pad_2d(arr, shape, value, allow_overflow))
