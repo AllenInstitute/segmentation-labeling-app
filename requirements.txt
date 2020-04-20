@@ -7,3 +7,5 @@ ipywidgets
 matplotlib
 psycopg2-binary
 pandas
+argschema==2.0.1
+jsonlines
