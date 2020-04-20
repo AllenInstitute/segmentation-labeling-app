@@ -1,5 +1,6 @@
 from typing import List, Tuple, Union
 import json
+import logging
 from pathlib import Path
 
 from scipy.sparse import coo_matrix
@@ -161,8 +162,9 @@ class ROI:
         if len(contours) > 0:
             return np.unique(np.squeeze(np.concatenate(contours), axis=1), axis=0)
         else:
-            print('no edges detected')
-            return []
+            logging.warning(msg=f"no edges detected for ROI: {self.roi_id} with"
+                            f" ophys_exp_id: {self.experiment_id}")
+            return np.array([])
 
     def get_edge_mask(self, threshold: float,
                       optional_array: np.array = None) -> np.array:
@@ -183,8 +185,9 @@ class ROI:
         edge_coordinates = self.get_edge_points(threshold=threshold,
                                                 optional_array=optional_array)
         mask_matrix = np.zeros(shape=self.image_shape)
-        for edge_coordinate in edge_coordinates:
-            mask_matrix[edge_coordinate[1]][edge_coordinate[0]] = 1
+        if len(edge_coordinates) > 0:
+            for edge_coordinate in edge_coordinates:
+                mask_matrix[edge_coordinate[1]][edge_coordinate[0]] = 1
         return mask_matrix
 
     def create_manifest_json(self, source_ref: str,
