@@ -158,7 +158,11 @@ class ROI:
         contours, _ = cv2.findContours(normalized_array,
                                        cv2.RETR_TREE,
                                        cv2.CHAIN_APPROX_NONE)
-        return np.squeeze(np.concatenate(contours), axis=1)
+        if len(contours) > 0:
+            return np.unique(np.squeeze(np.concatenate(contours), axis=1), axis=0)
+        else:
+            print('no edges detected')
+            return None
 
     def get_edge_mask(self, threshold: float,
                       optional_array: np.array = None) -> np.array:
