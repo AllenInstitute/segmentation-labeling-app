@@ -27,7 +27,7 @@ def downsample_h5_video(video_path: Union[Path], input_fps: int,
 
     Returns:
         new_video: A new video down-sampled to desired FPS with selected
-        strategy
+        strategy (time, row, col)
     """
     if not video_path.exists():
         raise FileNotFoundError('Path specified doesnt exist or is not accessible')
@@ -54,7 +54,7 @@ def _downsample_array(full_array: h5py.Dataset, input_fps: int,
     frame from window, maximum takes the maximum frame in window, average takes
     the mean of window, first takes the first frame, last takes the last frame.
     Args:
-        full_array: The video array in h5 dataset format
+        full_array: The video array in h5 dataset format (time, row, col)
         input_fps: The FPS or Hz of the input video
         output_fps: The desired output FPS or Hz
         strategy: The down-sampling strategy to follow
@@ -63,7 +63,7 @@ def _downsample_array(full_array: h5py.Dataset, input_fps: int,
 
     Returns:
         new_video: A new video down-sampled to desired FPS with selected
-        strategy
+        strategy (time, row, col)
     """
     if output_fps > input_fps:
         raise ValueError('Output FPS cannot be greater than input FPS')
@@ -107,13 +107,13 @@ def get_transformed_center(coordinate_pair: Tuple[int, int],
     x x x x    x 0 x x
     x 0 x x    x x x x
     Args:
-        coordinate_pair: the original coordinate location for centering
-        box_size: the size of the box for subset
-        video_shape: the x and y dimensions of the video
+        coordinate_pair: the original coordinate location for centering (x, y)
+        box_size: the size of the box for subset (row, col)
+        video_shape: the x and y dimensions of the video (time, row, col)
 
     Returns:
         transformed_center: returns the best fitting center of the box for out
-        of bounds coordinates
+        of bounds coordinates (x, y)
 
     """
     if box_size[0] > video_shape[0] or box_size[1] > video_shape[1]:
@@ -152,8 +152,8 @@ def get_centered_coordinate_box_video(coordinate_pair: Tuple[int, int],
     size specified by box size tuple. Function takes a subset of each frame
     and stacks together to get final video.
     Args:
-        coordinate_pair: the coordinate on which to center the subset
-        box_size: the size of the subset box
+        coordinate_pair: the coordinate on which to center the subset (x, y)
+        box_size: the size of the subset box (row, col)
         video_array: the video to take the subset from array should be of
                      form (t, w, h)
 
@@ -180,10 +180,10 @@ def generate_max_ave_proj_image(video: np.ndarray,
     Returns a maximum projection or an average projection of a video in
     numpy array format
     Args:
-        video: The video to generate the projection with shape (t, w, h)
+        video: The video to generate the projection with shape (time, row, col)
         projection_type: maximum or average, what type of projection
 
-    Returns: A numpy array generated with the specified strategy
+    Returns: A numpy array generated with the specified strategy (time, row, col)
 
     """
     if projection_type == 'average':
@@ -196,9 +196,9 @@ def normalize_video(video: np.ndarray):
     """
     Function to normalize video by its global max and maximum 8 bit value
     Args:
-        video: Video to be normalized with shape (t, w, h)
+        video: Video to be normalized with shape (time, row, col)
     Returns:
-        norm_frames: normalized video
+        norm_frames: normalized video (time, row, col)
     """
     return np.uint8(video / video.max() * 255)
 
@@ -209,7 +209,7 @@ def transform_to_mp4(video: np.ndarray, output_path: str,
     Function to transform 2p gray scale video into a mp4
     video using imageio_ffmpeg.
     Args:
-        video: Video to be transformed with shape (t, w, h)
+        video: Video to be transformed with shape (time, row, col)
         output_path: Output path for the transformed video
         fps: desired fps of the output video
 
@@ -221,7 +221,7 @@ def transform_to_mp4(video: np.ndarray, output_path: str,
                               video[0].shape,
                               pix_fmt_in="gray",
                               pix_fmt_out="gray",
-                              fps=30)
+                              fps=fps)
     writer.send(None)
     for frame in norm_video:
         writer.send(frame)
