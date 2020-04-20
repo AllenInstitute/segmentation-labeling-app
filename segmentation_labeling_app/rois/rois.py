@@ -69,14 +69,13 @@ class ROI:
         """
         label_vars = query_utils.get_labeling_env_vars()
 
-        shape_and_ophys_id = query_utils.query(
+        segmentation_run = query_utils.query(
             f"SELECT * FROM public.segmentation_runs WHERE id={segmentation_run_id}",
             user=label_vars.user,
             host=label_vars.host,
             database=label_vars.database,
             port=label_vars.port,
-            password=label_vars.password)[0]['video_shape',
-                                             'ophys_experiment_id']
+            password=label_vars.password)[0]
 
         roi = query_utils.query(
             f"SELECT * FROM public.rois WHERE "
@@ -89,8 +88,8 @@ class ROI:
         return ROI(coo_rows=roi[0]['coo_row'],
                    coo_cols=roi[0]['coo_col'],
                    coo_data=roi[0]['coo_data'],
-                   image_shape=shape_and_ophys_id[0],
-                   experiment_id=shape_and_ophys_id[1],
+                   image_shape=segmentation_run['video_shape'],
+                   experiment_id=segmentation_run['ophys_experiment_id'],
                    roi_id=roi_id)
 
     def generate_binary_mask_from_threshold(self, threshold: float) -> np.array:
