@@ -18,7 +18,7 @@ def downsample_h5_video(video_path: Union[Path], input_fps: int,
     window, maximum takes the maximum frame in window, average takes the mean
     of window.
     Args:
-        video_path: The path to the input video in str or Path format
+        video_path: The path to the input video in Path format
         input_fps: The FPS or Hz of the input video
         output_fps: The desired output FPS or Hz
         strategy: The down-sampling strategy to follow
@@ -107,13 +107,13 @@ def get_transformed_center(coordinate_pair: Tuple[int, int],
     x x x x    x 0 x x
     x 0 x x    x x x x
     Args:
-        coordinate_pair: the original coordinate location for centering (x, y)
+        coordinate_pair: the original coordinate location for centering (row, col)
         box_size: the size of the box for subset (row, col)
         video_shape: the x and y dimensions of the video (time, row, col)
 
     Returns:
         transformed_center: returns the best fitting center of the box for out
-        of bounds coordinates (x, y)
+        of bounds coordinates (row, col)
 
     """
     if box_size[0] > video_shape[0] or box_size[1] > video_shape[1]:
@@ -123,25 +123,25 @@ def get_transformed_center(coordinate_pair: Tuple[int, int],
     else:
         # if the box size is less than frame size it can only be out of bounds in
         # direction left and right and one direction up and down
-        transformed_x = coordinate_pair[0]
-        transformed_y = coordinate_pair[1]
+        transformed_col = coordinate_pair[1]
+        transformed_row = coordinate_pair[0]
         # can't be centered left
         if coordinate_pair[0] < (math.ceil(box_size[0]/2) - 1):
-            transformed_x = math.ceil(box_size[0] / 2) - 1
+            transformed_row = math.ceil(box_size[0] / 2) - 1
 
         # can't be centered up
         if coordinate_pair[1] < (math.ceil(box_size[1]/2) - 1):
-            transformed_y = math.ceil(box_size[1] / 2) - 1
+            transformed_col = math.ceil(box_size[1] / 2) - 1
 
         # can't be centered right
         if (coordinate_pair[0] + (math.ceil(box_size[0]/2))) > video_shape[0] - 1:
-            transformed_x = video_shape[0] - math.floor(box_size[0] / 2) - 1
+            transformed_row = video_shape[0] - math.floor(box_size[0] / 2) - 1
 
         # can't be centered down
         if (coordinate_pair[1] + (math.ceil(box_size[1]/2))) > video_shape[1] - 1:
-            transformed_y = video_shape[1] - math.floor(box_size[1] / 2) - 1
+            transformed_col = video_shape[1] - math.floor(box_size[1] / 2) - 1
 
-    return transformed_x, transformed_y
+    return transformed_row, transformed_col
 
 
 def get_centered_coordinate_box_video(coordinate_pair: Tuple[int, int],
@@ -152,10 +152,10 @@ def get_centered_coordinate_box_video(coordinate_pair: Tuple[int, int],
     size specified by box size tuple. Function takes a subset of each frame
     and stacks together to get final video.
     Args:
-        coordinate_pair: the coordinate on which to center the subset (x, y)
+        coordinate_pair: the coordinate on which to center the subset (row, col)
         box_size: the size of the subset box (row, col)
         video_array: the video to take the subset from array should be of
-                     form (t, w, h)
+                     form (time, row, col)
 
     Returns:
 
@@ -164,14 +164,15 @@ def get_centered_coordinate_box_video(coordinate_pair: Tuple[int, int],
         raise ValueError('Video does not have correct shape')
     transformed_coordinates = get_transformed_center(coordinate_pair, box_size,
                                                      video_array[0].shape)
-    left_column = transformed_coordinates[0] - math.floor(box_size[0] / 2)
-    right_column = transformed_coordinates[0] + math.ceil(box_size[0] / 2)
-    up_row = transformed_coordinates[1] - math.floor(box_size[1] / 2)
-    down_row = transformed_coordinates[1] + math.ceil(box_size[1] / 2)
+    print(transformed_coordinates)
+    left_column = transformed_coordinates[1] - math.floor(box_size[1] / 2)
+    right_column = transformed_coordinates[1] + math.ceil(box_size[1] / 2)
+    up_row = transformed_coordinates[0] - math.floor(box_size[0] / 2)
+    down_row = transformed_coordinates[0] + math.ceil(box_size[0] / 2)
     transformed_video = np.zeros(shape=(video_array.shape[0], box_size[0], box_size[1]))
     for i, frame in enumerate(video_array):
         transformed_video[i] = frame[up_row:down_row, left_column:right_column]
-    return transformed_video
+    return np.uint8(transformed_video)
 
 
 def generate_max_ave_proj_image(video: np.ndarray,
