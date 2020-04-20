@@ -135,11 +135,11 @@ def get_transformed_center(coordinate_pair: Tuple[int, int],
 
         # can't be centered right
         if (coordinate_pair[0] + (math.ceil(box_size[0]/2))) > video_shape[0] - 1:
-            transformed_x = video_shape[0] - math.ceil(box_size[0] / 2) - 1
+            transformed_x = video_shape[0] - math.floor(box_size[0] / 2) - 1
 
         # can't be centered down
         if (coordinate_pair[1] + (math.ceil(box_size[1]/2))) > video_shape[1] - 1:
-            transformed_y = video_shape[1] - math.ceil(box_size[1] / 2) - 1
+            transformed_y = video_shape[1] - math.floor(box_size[1] / 2) - 1
 
     return transformed_x, transformed_y
 
@@ -160,11 +160,13 @@ def get_centered_coordinate_box_video(coordinate_pair: Tuple[int, int],
     Returns:
 
     """
+    if not len(video_array[0].shape) == 2:
+        raise ValueError('Video does not have correct shape')
     transformed_coordinates = get_transformed_center(coordinate_pair, box_size,
-                                                     video_array.shape)
-    left_column = transformed_coordinates[0] - math.ceil(box_size[0] / 2)
+                                                     video_array[0].shape)
+    left_column = transformed_coordinates[0] - math.floor(box_size[0] / 2)
     right_column = transformed_coordinates[0] + math.ceil(box_size[0] / 2)
-    up_row = transformed_coordinates[1] - math.ceil(box_size[1] / 2)
+    up_row = transformed_coordinates[1] - math.floor(box_size[1] / 2)
     down_row = transformed_coordinates[1] + math.ceil(box_size[1] / 2)
     transformed_video = np.zeros(shape=(video_array.shape[0], box_size[0], box_size[1]))
     for i, frame in enumerate(video_array):

@@ -10,6 +10,9 @@ import imageio
 
 import segmentation_labeling_app.transforms.transformations as transformations
 
+test_frame = np.arange(25).reshape(5, 5)
+test_video = np.stack([test_frame]*2, axis=0)
+
 
 @pytest.fixture()
 def video_fixture():
@@ -56,47 +59,14 @@ def test_video_downsampling(input_fps, output_fps, random_seed, strategy,
                         ((0, 9), (10, 10), (512, 512), (4, 9)),
                         ((9, 0), (10, 10), (512, 512), (9, 4)),
                         ((511, 4), (10, 10), (512, 512), (506, 4)),
-                        ((4, 511), (10, 10), (512, 512), (4, 506))])
+                        ((4, 511), (10, 10), (512, 512), (4, 506)),
+                        ((5, 5), (3, 3), (5, 5), (3, 3))])
 def test_coordinate_window_shift(coordinate_pair, window_size, video_shape,
                                  expected_pair):
     transformed_center = transformations.get_transformed_center(coordinate_pair,
                                                                      window_size,
                                                                      video_shape)
     assert transformed_center == expected_pair
-
-
-@pytest.mark.parametrize("coordinate_pair, window_size, frame_cnt, video_width,"
-                         "video_height",
-                         [((4, 4), (6, 6), 20, 512, 512),
-                          ((10, 10), (12, 12), 20, 512, 512),
-                          ((510, 510), (10, 10), 20, 512, 512),
-                          ((10, 510), (10, 10), 20, 512, 512),
-                          ((510, 10), (10, 10), 20, 512, 512)])
-def test_video_subset_coord_pair(coordinate_pair, window_size, frame_cnt,
-                                 video_width, video_height):
-    np.random.seed(0)
-    video = np.random.randint(0, 255, size=(frame_cnt, video_width,
-                                            video_height))
-    transformed_coordinates = transformations.get_transformed_center(coordinate_pair,
-                                                                     window_size,
-                                                                     video.shape)
-    left_column = transformed_coordinates[0] - math.ceil(window_size[0] / 2)
-    right_column = transformed_coordinates[0] + math.ceil(window_size[0] / 2)
-    up_row = transformed_coordinates[1] - math.ceil(window_size[1] / 2)
-    down_row = transformed_coordinates[1] + math.ceil(window_size[1] / 2)
-
-    # transform video
-    transformed_video = transformations.get_centered_coordinate_box_video(coordinate_pair,
-                                                                          window_size,
-                                                                          video)
-    # random sample frame to test subset
-    random_index = random.randint(0, len(video) - 1)
-    random_transformed_frame = transformed_video[random_index]
-    random_regular_frame = video[random_index]
-    regular_subset = random_regular_frame[up_row:down_row,
-                                          left_column:right_column]
-
-    assert np.array_equal(regular_subset, random_transformed_frame)
 
 
 def test_mp4_conversion(video_fixture):
@@ -126,3 +96,32 @@ def test_mp4_conversion(video_fixture):
     assert frames.shape == video_fixture.shape
 
     os.remove(output_path)
+
+
+@pytest.mark.parametrize("video,coord,box_size,expected",
+    [(test_video, (0, 0), (3, 3),
+      np.stack([np.array([[0, 1, 2],
+                          [5, 6, 7],
+                          [10, 11, 12]])]*2)),
+     (test_video, (2, 2), (3, 3), np.stack([np.array([[6, 7, 8],
+                                                      [11, 12, 13],
+                                                      [16, 17, 18]])]*2)),
+     (test_video, (-1, -1), (3, 3), np.stack([np.array([[0, 1, 2], [5, 6, 7],
+                                                       [10, 11, 12]])]*2)),
+     (test_video, (10, 10), (3, 3), np.stack([np.array([[12, 13, 14], [17, 18, 19],
+                                                        [22, 23, 24]])] * 2)),
+     (test_video, (0, 10), (3, 3), np.stack([np.array([[10, 11, 12], [15, 16, 17],
+                                                       [20, 21, 22]])] * 2)),
+     (test_video, (10, 0), (3, 3), np.stack([np.array([[2, 3, 4], [7, 8, 9],
+                                                       [12, 13, 14]])] * 2)),
+     (test_video, (2, -1), (3, 3), np.stack([np.array([[1, 2, 3], [6, 7, 8],
+                                                        [11, 12, 13]])] * 2)),
+     (test_video, (-1, 2), (3, 3), np.stack([np.array([[5, 6, 7], [10, 11, 12],
+                                                       [15, 16, 17]])]*2)),
+     (test_video, (0, 0), (5, 5), test_video),
+     (test_video, (2, 2), (0, 0), np.zeros(shape=(2, 0, 0)))]
+)
+def test_get_centered_coordinate_box_video(video, coord, box_size, expected):
+    result = transformations.get_centered_coordinate_box_video(coord, box_size,
+                                                               video)
+    np.testing.assert_array_equal(expected, result)
