@@ -131,8 +131,8 @@ class ROI:
         dilation_kernel = cv2.getStructuringElement(cv2.MORPH_RECT,
                                                     ksize=(3, 3))
         for i in range(0, stroke_size):
-            dilated_mask = cv2.dilate(edge_mask, dilation_kernel,
-                                      iterations=i)
+            dilated_mask = np.uint8(cv2.dilate(edge_mask, dilation_kernel,
+                                    iterations=i))
             dilated_mask = self.get_edge_mask(threshold=1,
                                               optional_array=dilated_mask)
             final_mask = final_mask + dilated_mask
@@ -142,27 +142,27 @@ class ROI:
     def get_edge_points(self, threshold: float,
                         optional_array: np.array = None):
         """
-        Returns a list of edge points. Computes edges using binary erosion and
-        exclusive or operation. Generates edges from a thresholded binary mask.
+        Returns a list of edge points. Computes edges using opencv contours
+        method. Computes the edges from thresholded binary mask.
         Args:
             threshold: a float to threshold all values against to create binary
                        mask
             optional_array: an optional array to overload the function and
             create edge points from different mask
         Returns:
-            Contours: a list of coordinates that contain edge points
+            Contours: a numpy array of coordinates that contain edge points
+                      (n, row, col)
         """
         if optional_array is None:
             optional_array = self.generate_binary_mask_from_threshold(threshold)
-        normalized_array = np.uint8(optional_array * 255)
-        contours, _ = cv2.findContours(normalized_array,
-                                       cv2.RETR_TREE,
+        contours, _ = cv2.findContours(optional_array,
+                                       cv2.RETR_LIST,
                                        cv2.CHAIN_APPROX_NONE)
         if len(contours) > 0:
             return np.unique(np.squeeze(np.concatenate(contours), axis=1), axis=0)
         else:
             print('no edges detected')
-            return None
+            return []
 
     def get_edge_mask(self, threshold: float,
                       optional_array: np.array = None) -> np.array:

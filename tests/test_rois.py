@@ -43,7 +43,7 @@ def test_binary_mask(coo_rows, coo_cols, coo_data, video_shape,
                           ([1], [1], [0.75], (2, 2), 1, 1, 0.7,
                            np.array([[1, 1]])),
                           ([], [], [], (2, 2), 1, 1, 0.7,
-                           None),
+                           np.array([[]])),
                           ([1, 1, 1, 2, 2, 3, 3, 3],
                            [1, 2, 3, 1, 3, 1, 2, 3],
                            [0.8, 0.9, 0.85, 0.75, 0.82, 0.9, 0.85, 1],
@@ -53,7 +53,7 @@ def test_binary_mask(coo_rows, coo_cols, coo_data, video_shape,
                                                         [3, 1], [3, 2],
                                                         [3, 3]])),
                           ([1, 1, 2, 2], [1, 2, 1, 2], [0.5, 0.5, 0.5, 0.5],
-                           (5, 5), 1, 1, 0.7, None),
+                           (5, 5), 1, 1, 0.7, np.array([[]])),
                           ([1, 1, 1, 2, 2, 2, 3, 3, 3],
                            [1, 2, 3, 1, 2, 3, 1, 2, 3],
                            [0.8, 0.9, 0.4, 0.75, 0.5, 0.82, 0.9, 0.85, 1],
@@ -70,6 +70,18 @@ def test_binary_mask(coo_rows, coo_cols, coo_data, video_shape,
 def test_edge_detection_edges(coo_rows, coo_cols, coo_data, video_shape,
                               segmentation_id, roi_id, threshold,
                               expected_edges):
+    """
+    Test Cases:
+        1) 3 x 3 object in 5 x 5 video
+        2) 3 x 3 object with out cropping in 5 x 5 video
+        3) 1 x 1 object in 5 x 5 video
+        4) 0 x 0 object in 5 x 5 video
+        5) 3 x 3 object with a hole in center in a 5 x 5 box
+        6) 2 x 2 object with all values below threshold in a 5 x 5 box
+        7) 3 x 3 object with one pixel below threshold in 5 x 5 box
+        8) 2 x 2 object in top left corner and 2 x 2 in bottom right corner
+           not touching each other in a 4 x 4 box
+    """
     test_roi = roi_module.ROI(coo_rows, coo_cols, coo_data,
                               video_shape, segmentation_id, roi_id)
     edge_points = test_roi.get_edge_points(threshold=threshold)
@@ -93,10 +105,25 @@ def test_edge_detection_edges(coo_rows, coo_cols, coo_data, video_shape,
                                                         [0, 1, 1, 1, 0],
                                                         [1, 0, 0, 1, 0],
                                                         [0, 1, 1, 1, 0],
-                                                        [0, 0, 0, 0, 0]]))])
+                                                        [0, 0, 0, 0, 0]])),
+                          ([], [], [], (5, 5), 1, 1, 0.7, np.array([[0, 0, 0, 0, 0],
+                                                                    [0, 0, 0, 0, 0],
+                                                                    [0, 0, 0, 0, 0],
+                                                                    [0, 0, 0, 0, 0],
+                                                                    [0, 0, 0, 0, 0]])),
+                          ([1], [1], [1], (3, 3), 1, 1, 0.75, np.array([[0, 0, 0],
+                                                                        [0, 1, 0],
+                                                                        [0, 0, 0]]))])
 def test_edge_detection_mask(coo_rows, coo_cols, coo_data, video_shape,
                              segmentation_id, roi_id, threshold,
                              expected_mask):
+    """
+    Test Case:
+        1) 3 x 3 object in 5 x 5 in frame, edge mask gets rid of center
+        2) 3 x 3 object with overhang at (2, 0) in a 5 x 5 frame, edge mask eliminates pixels (2, 1) at (2, 2)
+        3) 0 x 0 object in a 5 x 5 frame, edge mask gets nothing
+        4) 1 x 1 object in a 5 x 5 frame, edge mask return 1 x 1 object
+    """
     test_roi = roi_module.ROI(coo_rows, coo_cols, coo_data,
                               video_shape, segmentation_id, roi_id)
     edge_mask = test_roi.get_edge_mask(threshold=threshold)
@@ -128,21 +155,9 @@ def test_edge_detection_mask(coo_rows, coo_cols, coo_data, video_shape,
                                                            [0, 1, 1, 1, 1],
                                                            [0, 1, 1, 1, 1],
                                                            [0, 1, 1, 1, 1]])),
-                          ([2, 2, 2, 3, 3, 3, 4, 4, 4],
-                           [2, 3, 4, 2, 3, 4, 2, 3, 4],
-                           [1, 1, 1, 1, 1, 1, 1, 1, 1],
-                           (7, 7), 1, 1, 0.7, 1, np.array(
-                              [[0, 0, 0, 0, 0, 0, 0],
-                               [0, 0, 0, 0, 0, 0, 0],
-                               [0, 0, 1, 1, 1, 0, 0],
-                               [0, 0, 1, 0, 1, 0, 0],
-                               [0, 0, 1, 1, 1, 0, 0],
-                               [0, 0, 0, 0, 0, 0, 0],
-                               [0, 0, 0, 0, 0, 0, 0]]
-                          )),
-                          ([2, 2, 2, 3, 3, 3, 4, 4, 4],
-                           [2, 3, 4, 2, 3, 4, 2, 3, 4],
-                           [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                          ([2, 2, 2, 3, 3, 4, 4, 4],
+                           [2, 3, 4, 2, 4, 2, 3, 4],
+                           [1, 1, 1, 1, 1, 1, 1, 1],
                            (7, 7), 1, 1, 0.7, 2, np.array(
                               [[0, 0, 0, 0, 0, 0, 0],
                                [0, 1, 1, 1, 1, 1, 0],
@@ -152,22 +167,38 @@ def test_edge_detection_mask(coo_rows, coo_cols, coo_data, video_shape,
                                [0, 1, 1, 1, 1, 1, 0],
                                [0, 0, 0, 0, 0, 0, 0]]
                           )),
-                          ([2, 2, 2, 3, 3, 3, 4, 4, 4],
-                           [2, 3, 4, 2, 3, 4, 2, 3, 4],
-                           [1, 1, 1, 1, 1, 1, 1, 1, 1],
-                           (7, 7), 1, 1, 0.7, 3, np.array(
-                              [[1, 1, 1, 1, 1, 1, 1],
-                               [1, 1, 1, 1, 1, 1, 1],
-                               [1, 1, 1, 1, 1, 1, 1],
-                               [1, 1, 1, 0, 1, 1, 1],
-                               [1, 1, 1, 1, 1, 1, 1],
-                               [1, 1, 1, 1, 1, 1, 1],
-                               [1, 1, 1, 1, 1, 1, 1]]
-                          ))
+                          ([], [], [], (3, 3), 1, 1, 0.7, 3,
+                           np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]])),
+                          ([1], [1], [1], (3, 3), 1, 1, 0.7, 2,
+                           np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])),
+                          ([0, 0, 1, 1, 3, 3, 4, 4], [0, 1, 0, 1, 3, 4, 3, 4],
+                           [1, 1, 1, 1, 1, 1, 1, 1], (5, 5), 1, 1, 0.5, 2,
+                           np.array([[1, 1, 1, 0, 0], [1, 1, 1, 0, 0],
+                                     [1, 1, 0, 1, 1], [0, 0, 1, 1, 1],
+                                     [0, 0, 1, 1, 1]])),
+                          ([1, 1, 1, 2, 2, 2, 3, 3, 3],
+                           [1, 2, 3, 1, 2, 3, 1, 2, 3],
+                           [0.75, 0.89, 0.92, 1, 0.43, 0.56, 0.98, 0.3, 0.1],
+                           (5, 5), 1, 1, 0.5, 2, np.array([[1, 1, 1, 1, 1],
+                                                           [1, 1, 1, 1, 1],
+                                                           [1, 1, 0, 1, 1],
+                                                           [1, 1, 0, 1, 1],
+                                                           [1, 1, 1, 0, 0]]))
                           ])
 def test_edge_dilated_mask(coo_rows, coo_cols, coo_data, video_shape,
                            segmentation_id, roi_id, threshold, stroke_size,
                            expected_mask):
+    """
+    Test Cases:
+        1) 3 x 3 object, dilated once to removes middle
+        2) 3 x 3 object with overhang at row 2 col 0, dilated once removes all but edges
+        3) 2 x 2 object centered in the bottom right quadrant, dilated once doubles width and height
+        4) 3 x 3 object centered in the middle of frame with hole at center, dilated twice
+        5) 0 x 0 object, dilated three times maintains no valid pixels
+        6) 1 x 1 object in 3 x 3 frame, dilated twice to fill frame
+        7) Two 2 x 2 objects in 5 x 5 frame, disjoint and not touching, dilated once
+        8) 3 x 3 object with certain pixels below threshold, dilated twice
+    """
     test_roi = roi_module.ROI(coo_rows, coo_cols, coo_data,
                               video_shape, segmentation_id, roi_id)
     dilated_mask = test_roi.create_dilated_contour_mask(threshold=threshold,
