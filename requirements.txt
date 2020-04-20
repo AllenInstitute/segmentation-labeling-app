@@ -1,5 +1,11 @@
 pytest
 boto3
 moto
+numpy
+scipy
+ipywidgets
+matplotlib
+psycopg2-binary
+pandas
 argschema==2.0.1
 jsonlines
