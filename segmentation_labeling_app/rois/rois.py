@@ -56,30 +56,31 @@ class ROI:
                                       shape=image_shape)
 
     @classmethod
-    def roi_from_query(cls, experiment_id: int,
+    def roi_from_query(cls, segmentation_run_id: int,
                        roi_id: int) -> "ROI":
         """
         Queries and builds ROI object by querying LIMS table for
         produced labeling ROIs.
         Args:
-            experiment_id: Id of the segmentation run
+            segmentation_run_id: Id of the segmentation run
             roi_id: Unique Id of the ROI to be loaded
 
         Returns: ROI object for the given segmentation_id and roi_id
         """
         label_vars = query_utils.get_labeling_env_vars()
 
-        shape = query_utils.query(
-            f"SELECT * FROM public.segmentation_runs WHERE id={experiment_id}",
+        shape_and_ophys_id = query_utils.query(
+            f"SELECT * FROM public.segmentation_runs WHERE id={segmentation_run_id}",
             user=label_vars.user,
             host=label_vars.host,
             database=label_vars.database,
             port=label_vars.port,
-            password=label_vars.password)[0]['video_shape']
+            password=label_vars.password)[0]['video_shape',
+                                             'ophys_experiment_id']
 
         roi = query_utils.query(
             f"SELECT * FROM public.rois WHERE "
-            f"segmentation_run_id={experiment_id} AND id={roi_id}",
+            f"segmentation_run_id={segmentation_run_id} AND id={roi_id}",
             user=label_vars.user,
             host=label_vars.host,
             database=label_vars.database,
@@ -88,8 +89,8 @@ class ROI:
         return ROI(coo_rows=roi[0]['coo_row'],
                    coo_cols=roi[0]['coo_col'],
                    coo_data=roi[0]['coo_data'],
-                   image_shape=shape,
-                   experiment_id=experiment_id,
+                   image_shape=shape_and_ophys_id[0],
+                   experiment_id=shape_and_ophys_id[1],
                    roi_id=roi_id)
 
     def generate_binary_mask_from_threshold(self, threshold: float) -> np.array:
@@ -236,5 +237,6 @@ class ROI:
         curr.execute(sql_insert_roi, roi_task)
         unique_id = curr.lastrowid
         db_connection.commit()
+        db_connection.close()
 
         return unique_id
