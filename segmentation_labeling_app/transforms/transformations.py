@@ -164,7 +164,6 @@ def get_centered_coordinate_box_video(coordinate_pair: Tuple[int, int],
         raise ValueError('Video does not have correct shape')
     transformed_coordinates = get_transformed_center(coordinate_pair, box_size,
                                                      video_array[0].shape)
-    print(transformed_coordinates)
     left_column = transformed_coordinates[1] - math.floor(box_size[1] / 2)
     right_column = transformed_coordinates[1] + math.ceil(box_size[1] / 2)
     up_row = transformed_coordinates[0] - math.floor(box_size[0] / 2)
