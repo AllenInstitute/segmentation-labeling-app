@@ -57,38 +57,37 @@ class ROI:
                                       shape=image_shape)
 
     @classmethod
-    def roi_from_query(cls, segmentation_run_id: int,
-                       roi_id: int) -> "ROI":
+    def roi_from_query(cls, roi_id: int) -> "ROI":
         """
         Queries and builds ROI object by querying LIMS table for
         produced labeling ROIs.
         Args:
-            segmentation_run_id: Id of the segmentation run
             roi_id: Unique Id of the ROI to be loaded
 
         Returns: ROI object for the given segmentation_id and roi_id
         """
         label_vars = query_utils.get_labeling_env_vars()
 
-        segmentation_run = query_utils.query(
-            f"SELECT * FROM public.segmentation_runs WHERE id={segmentation_run_id}",
+        roi = query_utils.query(
+            f"SELECT * FROM rois WHERE id={roi_id}",
             user=label_vars.user,
             host=label_vars.host,
             database=label_vars.database,
             port=label_vars.port,
             password=label_vars.password)[0]
 
-        roi = query_utils.query(
-            f"SELECT * FROM public.rois WHERE "
-            f"segmentation_run_id={segmentation_run_id} AND id={roi_id}",
+        segmentation_run = query_utils.query(
+            ("SELECT * FROM segmentation_runs WHERE "
+             f"id={roi['segmentation_run_id']}"),
             user=label_vars.user,
             host=label_vars.host,
             database=label_vars.database,
             port=label_vars.port,
-            password=label_vars.password)
-        return ROI(coo_rows=roi[0]['coo_row'],
-                   coo_cols=roi[0]['coo_col'],
-                   coo_data=roi[0]['coo_data'],
+            password=label_vars.password)[0]
+
+        return ROI(coo_rows=roi['coo_row'],
+                   coo_cols=roi['coo_col'],
+                   coo_data=roi['coo_data'],
                    image_shape=segmentation_run['video_shape'],
                    experiment_id=segmentation_run['ophys_experiment_id'],
                    roi_id=roi_id)
