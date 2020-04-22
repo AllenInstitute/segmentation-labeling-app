@@ -59,7 +59,6 @@ def test_binary_mask_from_threshold(
             weighted,
             absolute_threshold=athresh,
             cumulative_threshold=cthresh)
-    print(binary)
     assert np.all(binary == expected)
 
 
