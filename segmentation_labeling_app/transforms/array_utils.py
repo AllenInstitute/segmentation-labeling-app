@@ -46,7 +46,8 @@ def content_boundary_2d(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:
 
 def content_extents(
         arr: Union[np.ndarray, coo_matrix],
-        shape: Tuple[int, int]):
+        shape: Tuple[int, int],
+        target_shape: Tuple[int, int] = None):
     """return the bounding box of size shape. Intended to be applied to
     a target data source, for example a set of video frames.
 
@@ -58,10 +59,16 @@ def content_extents(
     shape: (Tuple[int,int]) Desired final shape after padding is applied.
         If smaller than the input array, will return the input array
         without any changes.
+    target_shape: (Tuple[int, int]) Extent of array to be indexed. If None
+        padding will still handle top and left, but bottom and right padding
+        will always be zero
 
     Returns
     -------
-    4-tuple of row/column boundaries. Can be negative.
+    indexing_bounds: tuple
+        4-tuple of row/column boundaries
+    pad_width: tuple(tuple, tuple)
+        to be passed into numpy.pad as pad_width
 
     """
     boundaries = content_boundary_2d(arr)
@@ -87,7 +94,27 @@ def content_extents(
     left = boundaries[2] - left_pad
     right = boundaries[3] + right_pad
 
-    return top, bot, left, right
+    pad_width = [[0, 0], [0, 0]]
+    if top < 0:
+        pad_width[0][0] = abs(top)
+        top = 0
+    if left < 0:
+        pad_width[1][0] = abs(left)
+        left = 0
+    if target_shape is not None:
+        dh = target_shape[0] - bot
+        if dh < 0:
+            pad_width[0][1] = abs(dh)
+            bot = target_shape[0]
+        dw = target_shape[1] - right
+        if dw < 0:
+            pad_width[1][1] = abs(dw)
+            right = target_shape[1]
+
+    indexing_bounds = (top, bot, left, right)
+    pad_width = tuple([tuple(i) for i in pad_width])
+
+    return indexing_bounds, pad_width
 
 
 def crop_2d_array(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:

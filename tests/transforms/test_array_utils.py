@@ -147,7 +147,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [0, 0, 0, 0, 0, 0, 0],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (5, 5),
-                (1, 6, 1, 6)),
+                ((1, 6, 1, 6), ((0, 0), (0, 0)))),
             (
                 np.array([
                     [0, 0, 0, 0, 0, 0, 0],
@@ -158,7 +158,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [0, 0, 0, 0, 0, 0, 0],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (5, 5),
-                (1, 6, 1, 6)),
+                ((1, 6, 1, 6), ((0, 0), (0, 0)))),
             (
                 np.array([
                     [0, 0, 0, 0, 0, 0, 0],
@@ -169,7 +169,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [0, 0, 0, 0, 0, 0, 0],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (5, 5),
-                (2, 7, 2, 7)),
+                ((2, 7, 2, 7), ((0, 0), (0, 0)))),
             (
                 np.array([
                     [1, 1, 0, 0, 0, 0, 0],
@@ -180,7 +180,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [0, 0, 0, 0, 0, 0, 0],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (5, 5),
-                (-2, 3, -1, 4)),
+                ((0, 3, 0, 4), ((2, 0), (1, 0)))),
             (
                 np.array([
                     [0, 0, 0, 0, 0, 0, 0],
@@ -191,7 +191,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [1, 1, 1, 1, 1, 1, 1],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (2, 2),
-                (3, 5, 3, 5)),
+                ((3, 5, 3, 5), ((0, 0), (0, 0)))),
             (
                 np.array([
                     [0, 0, 0, 0, 0, 0, 0],
@@ -202,7 +202,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [1, 1, 1, 1, 1, 1, 1],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (3, 3),
-                (2, 5, 2, 5)),
+                ((2, 5, 2, 5), ((0, 0), (0, 0)))),
             ])
 def test_content_extents(arr, shape, expected):
     bounds = au.content_extents(arr, shape)
@@ -229,6 +229,8 @@ def test_compare_crop_pad_and_extents(arr, shape):
     indexing the array (i.e. as would be applied to video frame)
     """
     cropped_padded = au.center_pad_2d(au.crop_2d_array(arr), shape)
-    extents = au.content_extents(arr, shape)
-    indexed = arr[extents[0]:extents[1], extents[2]:extents[3]]
+    extents, pad_width = au.content_extents(arr, shape)
+    indexed = np.pad(
+            arr[extents[0]:extents[1], extents[2]:extents[3]],
+            pad_width)
     assert np.all(cropped_padded == indexed)
