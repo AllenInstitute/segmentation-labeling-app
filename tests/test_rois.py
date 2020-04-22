@@ -29,6 +29,8 @@ def test_cumulative_fraction(data, target_fraction, expected):
         ("weighted", "expected", "athresh", "cthresh"),
         [
             (
+                # cumulative threshold of 0.8 will
+                # eliminate the 0.5's in this example
                 np.array([
                     [0.0, 0.5, 1.0],
                     [0.0, 2.0, 2.0],
@@ -40,6 +42,8 @@ def test_cumulative_fraction(data, target_fraction, expected):
                 None,
                 0.8),
             (
+                # absolute threshold will only keep
+                # values > 1.5
                 np.array([
                     [0.0, 0.5, 1.0],
                     [0.0, 2.0, 2.0],
@@ -130,6 +134,8 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
 
 @pytest.mark.parametrize("mask, full, shape, expected", [
     (
+        # full=False and shape=None will just
+        # crop to the data
         np.array([
             [0.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 1.0, 0.0],
@@ -141,6 +147,8 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
             [1.0, 1.0],
             [1.0, 1.0]])),
     (
+        # full = True will give back the entire frame
+        # in this case, the frame is only 4x4
         np.array([
             [0.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 1.0, 0.0],
@@ -155,6 +163,9 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
             [0.0, 0.0, 0.0, 0.0]]),
         ),
     (
+        # shape=(5, 5) should give back a
+        # padded window of that shape
+        # this is an asymmetric padding case
         np.array([
             [0.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 1.0, 0.0],
@@ -170,6 +181,8 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
             [0.0, 0.0, 0.0, 0.0, 0.0]]),
         ),
     (
+        # shape=(6, 6) also should come back
+        # this is a symmetric padding case
         np.array([
             [0.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 1.0, 0.0],
