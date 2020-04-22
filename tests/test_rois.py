@@ -214,7 +214,28 @@ def test_roi_generate_mask(mask, shape, full, expected):
                     ]),
                 0.7,
                 None,
-                True)])
+                True),
+            (
+                np.array([
+                    [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+                    [1.0, 0.0, 0.5, 0.0, 0.0, 1.0],
+                    [1.0, 0.0, 2.0, 1.0, 0.5, 1.0],
+                    [2.0, 0.0, 1.0, 1.5, 0.5, 1.0],
+                    [1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+                    [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+                    ]),
+                np.array([
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 0, 1],
+                    [1, 0, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1]
+                    ]),
+                0.7,
+                None,
+                True),
+            ])
 def test_roi_generate_outline(weighted, full, expected, athresh, quantile):
     """this test is not exhaustive
     """
