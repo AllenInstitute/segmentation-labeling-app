@@ -132,3 +132,103 @@ def test_crop_array_raises_error(arr):
 def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
     np.testing.assert_equal(
         expected, au.center_pad_2d(arr, shape, value, allow_overflow))
+
+
+@pytest.mark.parametrize(
+        ("arr", "shape", "expected"),
+        [
+            (
+                np.array([
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 1, 1, 1, 0, 0],
+                    [0, 0, 1, 1, 1, 0, 0],
+                    [0, 0, 1, 1, 1, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0]]),
+                (5, 5),
+                (1, 6, 1, 6)),
+            (
+                np.array([
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 1, 1, 0, 0, 0],
+                    [0, 0, 1, 1, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0]]),
+                (5, 5),
+                (1, 6, 1, 6)),
+            (
+                np.array([
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 1, 1, 0, 0],
+                    [0, 0, 0, 1, 1, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0]]),
+                (5, 5),
+                (2, 7, 2, 7)),
+            (
+                np.array([
+                    [1, 1, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0]]),
+                (5, 5),
+                (-2, 3, -1, 4)),
+            (
+                np.array([
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [0, 0, 0, 0, 0, 0, 0]]),
+                (2, 2),
+                (3, 5, 3, 5)),
+            (
+                np.array([
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [0, 0, 0, 0, 0, 0, 0]]),
+                (3, 3),
+                (2, 5, 2, 5)),
+            ])
+def test_content_extents(arr, shape, expected):
+    bounds = au.content_extents(arr, shape)
+    assert np.all(bounds == expected)
+
+
+@pytest.mark.parametrize(
+        ("arr", "shape"),
+        [
+            (
+                np.array([
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 1, 1, 1, 0, 0],
+                    [0, 0, 1, 2, 2, 0, 0],
+                    [0, 0, 1, 1, 3, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 0, 0]]),
+                (5, 5)),
+            ])
+def test_compare_crop_pad_and_extents(arr, shape):
+    """check that cropping and padding an image
+    is the same as getting the extents and
+    indexing the array (i.e. as would be applied to video frame)
+    """
+    cropped_padded = au.center_pad_2d(au.crop_2d_array(arr), shape)
+    extents = au.content_extents(arr, shape)
+    indexed = arr[extents[0]:extents[1], extents[2]:extents[3]]
+    assert np.all(cropped_padded == indexed)

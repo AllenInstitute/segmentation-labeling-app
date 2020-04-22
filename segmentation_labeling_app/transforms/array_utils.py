@@ -44,6 +44,52 @@ def content_boundary_2d(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:
     return top_bound, bot_bound, left_bound, right_bound
 
 
+def content_extents(
+        arr: Union[np.ndarray, coo_matrix],
+        shape: Tuple[int, int]):
+    """return the bounding box of size shape. Intended to be applied to
+    a target data source, for example a set of video frames.
+
+    Parameters
+    ----------
+    arr: A 2d np.ndarray or coo_matrix. Other formats are also possible
+        (csc_matrix, etc.) as long as they have the toarray() method to
+         convert them to np.ndarray.
+    shape: (Tuple[int,int]) Desired final shape after padding is applied.
+        If smaller than the input array, will return the input array
+        without any changes.
+
+    Returns
+    -------
+    4-tuple of row/column boundaries. Can be negative.
+
+    """
+    boundaries = content_boundary_2d(arr)
+    height = boundaries[1] - boundaries[0]
+    width = boundaries[3] - boundaries[2]
+
+    vertical_pad = shape[0] - height
+    horizontal_pad = shape[1] - width
+
+    if vertical_pad % 2 == 0:
+        top_pad = bottom_pad = int(vertical_pad / 2)
+    else:
+        top_pad = math.floor(vertical_pad / 2)
+        bottom_pad = top_pad + 1
+    if horizontal_pad % 2 == 0:
+        left_pad = right_pad = int(horizontal_pad / 2)
+    else:
+        left_pad = math.floor(horizontal_pad / 2)
+        right_pad = left_pad + 1
+
+    top = boundaries[0] - top_pad
+    bot = boundaries[1] + bottom_pad
+    left = boundaries[2] - left_pad
+    right = boundaries[3] + right_pad
+
+    return top, bot, left, right
+
+
 def crop_2d_array(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:
     """
     Crop a 2d array to a rectangle surrounding all nonzero elements.
