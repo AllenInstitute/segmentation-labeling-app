@@ -6,30 +6,12 @@ from scipy.sparse import coo_matrix
 import segmentation_labeling_app.rois.rois as roi_module
 
 
-@pytest.mark.parametrize(
-        ("data", "target_fraction", "expected"),
-        [
-            (np.linspace(0, 1.0, 1000), 0.95, 0.95),
-            (np.linspace(0, 1.0, 1000), 0.05, 0.05),
-            (np.array([1.0, 1.0, 5.0, 5.0]), 0.65, 10/12)
-            ])
-def test_cumulative_fraction(data, target_fraction, expected):
-    """for large number of samples, we get close to what is expected
-    for small numbers of samples, the possible fractional values
-    are not as close to a continuous function.
-    """
-    absolute_threshold = roi_module.cumulative_fraction_threshold(
-            data, target_fraction)
-    frac = data[data > absolute_threshold].sum() / data.sum()
-    assert np.isclose(frac, expected, atol=0.05)
-
-
 @pytest.mark.parametrize("use_coo", [True, False])
 @pytest.mark.parametrize(
-        ("weighted", "expected", "athresh", "cthresh"),
+        ("weighted", "expected", "athresh", "quantile"),
         [
             (
-                # cumulative threshold of 0.8 will
+                # quantile of 0.2 will
                 # eliminate the 0.5's in this example
                 np.array([
                     [0.0, 0.5, 1.0],
@@ -40,7 +22,7 @@ def test_cumulative_fraction(data, target_fraction, expected):
                     [0, 1, 1],
                     [1, 1, 0]]),
                 None,
-                0.8),
+                0.2),
             (
                 # absolute threshold will only keep
                 # values > 1.5
@@ -56,13 +38,13 @@ def test_cumulative_fraction(data, target_fraction, expected):
                 None),
                 ])
 def test_binary_mask_from_threshold(
-        weighted, expected, athresh, cthresh, use_coo):
+        weighted, expected, athresh, quantile, use_coo):
     if use_coo:
         weighted = coo_matrix(weighted)
     binary = roi_module.binary_mask_from_threshold(
             weighted,
             absolute_threshold=athresh,
-            cumulative_threshold=cthresh)
+            quantile=quantile)
     assert np.all(binary == expected)
 
 
@@ -213,7 +195,7 @@ def test_roi_generate_mask(mask, shape, full, expected):
 
 
 @pytest.mark.parametrize(
-        ("weighted", "expected", "athresh", "cthresh", "full"),
+        ("weighted", "expected", "athresh", "quantile", "full"),
         [
             (
                 np.array([
@@ -233,7 +215,7 @@ def test_roi_generate_mask(mask, shape, full, expected):
                 0.7,
                 None,
                 True)])
-def test_roi_generate_outline(weighted, full, expected, athresh, cthresh):
+def test_roi_generate_outline(weighted, full, expected, athresh, quantile):
     """this test is not exhaustive
     """
     coo = coo_matrix(weighted)
@@ -244,7 +226,10 @@ def test_roi_generate_outline(weighted, full, expected, athresh, cthresh):
             image_shape=weighted.shape,
             experiment_id=1234,
             roi_id=4567)
-    outline = roi.generate_ROI_outline(full=full)
+    outline = roi.generate_ROI_outline(
+            full=full,
+            absolute_threshold=athresh,
+            quantile=quantile)
     assert np.all(outline == expected)
 
 

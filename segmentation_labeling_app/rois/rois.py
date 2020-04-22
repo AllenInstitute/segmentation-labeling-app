@@ -1,7 +1,6 @@
 from typing import List, Tuple, Union
 import json
 from pathlib import Path
-from scipy.optimize import bisect
 from scipy.sparse import coo_matrix
 import numpy as np
 import cv2
@@ -29,37 +28,10 @@ sql_insert_roi = """ INSERT INTO rois_prelabeling (transform_hash,
                      VALUES (?, ?, ?, ?, ?, ?, ?) """
 
 
-def cumulative_fraction_threshold(data, target_fraction):
-    """return a threshold value above which the summed weights are
-    target_fraction of the total summed weights
-
-    Parameters
-    ----------
-    data : numpy.ndarray
-        1d array of data, all values > 0
-    target_fraction : float
-        in range [0, 1.0]
-
-    Returns
-    -------
-    fval : float
-        data[data > fval].sum() / data.sum() ~ target_fraction
-
-    """
-    def fopt(x):
-        frac = data[data > x].sum() / data.sum()
-        diff = target_fraction - frac
-        return diff
-
-    fval = bisect(fopt, data.min(), data.max())
-
-    return fval
-
-
 def binary_mask_from_threshold(
             arr: Union[np.ndarray, coo_matrix],
             absolute_threshold: float = None,
-            cumulative_threshold: float = 0.9) -> np.array:
+            quantile: float = 0.1) -> np.array:
     """Binarize an array
 
     Parameters
@@ -68,10 +40,9 @@ def binary_mask_from_threshold(
         2D array of weighted floating-point values
     absolute_threshold: float
         weighted entries above this value=1, below=0
-        over-ridden if cumulative_threshold is set
-    cumulative_threshold: float
-        if specified, set absolute threshold determined by fraction of
-        total weight above this value
+        over-ridden if quantile is set
+    quantile: float
+        if specified, set absolute threshold np.quantile(arr.data, quantile)
 
     Returns
     -------
@@ -84,10 +55,8 @@ def binary_mask_from_threshold(
         wmask = arr.toarray()
     vals = wmask[np.nonzero(wmask)]
 
-    if cumulative_threshold is not None:
-        absolute_threshold = cumulative_fraction_threshold(
-                vals,
-                cumulative_threshold)
+    if quantile is not None:
+        absolute_threshold = np.quantile(vals, quantile)
 
     binary = np.uint8(wmask > absolute_threshold)
 
@@ -215,7 +184,7 @@ class ROI:
             self, shape: Tuple[int, int] = None,
             full: bool = False,
             absolute_threshold: float = None,
-            cumulative_threshold: float = 0.9,
+            quantile: float = 0.1,
             dilation_kernel_size: int = 1, inner_outline: bool = True):
         """return a 2D dense representation of the mask outline
 
@@ -227,10 +196,10 @@ class ROI:
             if True, the full-frame array is returned
         absolute_threshold: float
             weighted entries above this value=1, below=0
-            over-ridden if cumulative_threshold is set
-        cumulative_threshold: float
-            if specified, set absolute threshold determined by fraction of
-            total weight above this value
+            over-ridden if quantile is set
+        quantile: float
+            if specified, set absolute threshold by using np.quantile()
+            with this value as the quantile arg
         dilation_kernel_size: int
             passed as size to cv2.getStructuringElement()
         inner_outline: bool
@@ -245,7 +214,7 @@ class ROI:
         binary = binary_mask_from_threshold(
             self._sparse_coo,
             absolute_threshold=absolute_threshold,
-            cumulative_threshold=cumulative_threshold)
+            quantile=quantile)
 
         contours, _ = cv2.findContours(binary,
                                        cv2.RETR_LIST,
