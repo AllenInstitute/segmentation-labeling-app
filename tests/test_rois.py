@@ -198,6 +198,7 @@ def test_roi_generate_mask(mask, shape, full, expected):
         ("weighted", "expected", "athresh", "quantile", "full"),
         [
             (
+                # basic test of making an outline mask
                 np.array([
                     [0.0, 0.0, 0.0, 0.0, 0.0],
                     [0.0, 0.5, 1.0, 0.0, 0.0],
@@ -216,6 +217,8 @@ def test_roi_generate_mask(mask, shape, full, expected):
                 None,
                 True),
             (
+                # basic test where the ROI produces two distinct
+                # contours in the outline mask
                 np.array([
                     [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
                     [1.0, 0.0, 0.5, 0.0, 0.0, 1.0],
