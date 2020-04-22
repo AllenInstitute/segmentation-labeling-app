@@ -59,7 +59,6 @@ def content_extents(
     shape: (Tuple[int,int]) Desired final shape after padding is applied.
         If smaller than the input array, will return the input array
         without any changes.
-<<<<<<< HEAD
     target_shape: (Tuple[int, int]) Extent of array to be indexed. If None
         padding will still handle top and left, but bottom and right padding
         will always be zero
@@ -70,12 +69,16 @@ def content_extents(
         4-tuple of row/column boundaries
     pad_width: tuple(tuple, tuple)
         to be passed into numpy.pad as pad_width
-=======
+    target_shape: (Tuple[int, int]) Extent of array to be indexed. If None
+        padding will still handle top and left, but bottom and right padding
+        will always be zero
 
     Returns
     -------
-    4-tuple of row/column boundaries. Can be negative.
->>>>>>> adds new extents capability for indexing video frames
+    indexing_bounds: tuple
+        4-tuple of row/column boundaries
+    pad_width: tuple(tuple, tuple)
+        to be passed into numpy.pad as pad_width
 
     """
     boundaries = content_boundary_2d(arr)
@@ -101,7 +104,6 @@ def content_extents(
     left = boundaries[2] - left_pad
     right = boundaries[3] + right_pad
 
-<<<<<<< HEAD
     pad_width = [[0, 0], [0, 0]]
     if top < 0:
         pad_width[0][0] = abs(top)
@@ -123,9 +125,6 @@ def content_extents(
     pad_width = tuple([tuple(i) for i in pad_width])
 
     return indexing_bounds, pad_width
-=======
-    return top, bot, left, right
->>>>>>> adds new extents capability for indexing video frames
 
 
 def crop_2d_array(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:

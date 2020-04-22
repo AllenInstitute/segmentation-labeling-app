@@ -147,11 +147,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [0, 0, 0, 0, 0, 0, 0],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (5, 5),
-<<<<<<< HEAD
                 ((1, 6, 1, 6), ((0, 0), (0, 0)))),
-=======
-                (1, 6, 1, 6)),
->>>>>>> adds new extents capability for indexing video frames
             (
                 np.array([
                     [0, 0, 0, 0, 0, 0, 0],
@@ -162,11 +158,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [0, 0, 0, 0, 0, 0, 0],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (5, 5),
-<<<<<<< HEAD
                 ((1, 6, 1, 6), ((0, 0), (0, 0)))),
-=======
-                (1, 6, 1, 6)),
->>>>>>> adds new extents capability for indexing video frames
             (
                 np.array([
                     [0, 0, 0, 0, 0, 0, 0],
@@ -177,11 +169,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [0, 0, 0, 0, 0, 0, 0],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (5, 5),
-<<<<<<< HEAD
                 ((2, 7, 2, 7), ((0, 0), (0, 0)))),
-=======
-                (2, 7, 2, 7)),
->>>>>>> adds new extents capability for indexing video frames
             (
                 np.array([
                     [1, 1, 0, 0, 0, 0, 0],
@@ -192,11 +180,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [0, 0, 0, 0, 0, 0, 0],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (5, 5),
-<<<<<<< HEAD
                 ((0, 3, 0, 4), ((2, 0), (1, 0)))),
-=======
-                (-2, 3, -1, 4)),
->>>>>>> adds new extents capability for indexing video frames
             (
                 np.array([
                     [0, 0, 0, 0, 0, 0, 0],
@@ -207,11 +191,7 @@ def test_center_pad_2d(arr, shape, value, allow_overflow, expected):
                     [1, 1, 1, 1, 1, 1, 1],
                     [0, 0, 0, 0, 0, 0, 0]]),
                 (2, 2),
-<<<<<<< HEAD
                 ((3, 5, 3, 5), ((0, 0), (0, 0)))),
-=======
-                (3, 5, 3, 5)),
->>>>>>> adds new extents capability for indexing video frames
             (
                 np.array([
                     [0, 0, 0, 0, 0, 0, 0],
