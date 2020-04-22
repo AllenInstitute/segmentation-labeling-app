@@ -29,7 +29,7 @@ sql_insert_roi = """ INSERT INTO rois_prelabeling (transform_hash,
                      VALUES (?, ?, ?, ?, ?, ?, ?) """
 
 
-def cumulative_fraction_threshold(data, target_fraction, nbins=200):
+def cumulative_fraction_threshold(data, target_fraction):
     """return a threshold value above which the summed weights are
     target_fraction of the total summed weights
 
@@ -59,8 +59,7 @@ def cumulative_fraction_threshold(data, target_fraction, nbins=200):
 def binary_mask_from_threshold(
             arr: Union[np.ndarray, coo_matrix],
             absolute_threshold: float = None,
-            cumulative_threshold: float = 0.9,
-            nbins: int = 50) -> np.array:
+            cumulative_threshold: float = 0.9) -> np.array:
     """Binarize an array
 
     Parameters
@@ -73,9 +72,6 @@ def binary_mask_from_threshold(
     cumulative_threshold: float
         if specified, set absolute threshold determined by fraction of
         total weight above this value
-    nbins: int
-        if cumulative specified, determines
-        for interpolating
 
     Returns
     -------
@@ -91,8 +87,7 @@ def binary_mask_from_threshold(
     if cumulative_threshold is not None:
         absolute_threshold = cumulative_fraction_threshold(
                 vals,
-                cumulative_threshold,
-                nbins=nbins)
+                cumulative_threshold)
 
     binary = np.uint8(wmask > absolute_threshold)
 
@@ -220,7 +215,7 @@ class ROI:
             self, shape: Tuple[int, int] = None,
             full: bool = False,
             absolute_threshold: float = None,
-            cumulative_threshold: float = 0.9, nbins: int = 50,
+            cumulative_threshold: float = 0.9,
             dilation_kernel_size: int = 1, inner_outline: bool = True):
         """return a 2D dense representation of the mask outline
 
@@ -236,9 +231,6 @@ class ROI:
         cumulative_threshold: float
             if specified, set absolute threshold determined by fraction of
             total weight above this value
-        nbins: int
-            if cumulative specified, determines
-            for interpolating
         dilation_kernel_size: int
             passed as size to cv2.getStructuringElement()
         inner_outline: bool
@@ -253,8 +245,7 @@ class ROI:
         binary = binary_mask_from_threshold(
             self._sparse_coo,
             absolute_threshold=absolute_threshold,
-            cumulative_threshold=cumulative_threshold,
-            nbins=nbins)
+            cumulative_threshold=cumulative_threshold)
 
         contours, _ = cv2.findContours(binary,
                                        cv2.RETR_LIST,
