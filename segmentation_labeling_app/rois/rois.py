@@ -1,14 +1,15 @@
 from typing import List, Tuple, Union
 import json
-import logging
 from pathlib import Path
-
+from scipy.optimize import bisect
 from scipy.sparse import coo_matrix
 import numpy as np
 import cv2
 import sqlite3
 
 import segmentation_labeling_app.utils.query_utils as query_utils
+from segmentation_labeling_app.transforms.array_utils import (
+        center_pad_2d, crop_2d_array)
 
 
 sql_create_rois_table = """ CREATE TABLE IF NOT EXISTS rois_prelabeling (
@@ -24,8 +25,110 @@ sql_create_rois_table = """ CREATE TABLE IF NOT EXISTS rois_prelabeling (
 sql_insert_roi = """ INSERT INTO rois_prelabeling (transform_hash,
                      ophys_segmentation_commit_hash,
                      creation_date, upload_date, manifest, experiment_id,
-                     roi_id) 
+                     roi_id)
                      VALUES (?, ?, ?, ?, ?, ?, ?) """
+
+
+def cumulative_fraction_threshold(data, target_fraction, nbins=200):
+    """return a threshold value above which the summed weights are
+    target_fraction of the total summed weights
+
+    Parameters
+    ----------
+    data : numpy.ndarray
+        1d array of data, all values > 0
+    target_fraction : float
+        in range [0, 1.0]
+
+    Returns
+    -------
+    fval : float
+        data[data > fval].sum() / data.sum() ~ target_fraction
+
+    """
+    def fopt(x):
+        frac = data[data > x].sum() / data.sum()
+        diff = target_fraction - frac
+        return diff
+
+    fval = bisect(fopt, data.min(), data.max())
+
+    return fval
+
+
+def binary_mask_from_threshold(
+            arr: Union[np.ndarray, coo_matrix],
+            absolute_threshold: float = None,
+            cumulative_threshold: float = 0.9,
+            nbins: int = 50) -> np.array:
+    """Binarize an array
+
+    Parameters
+    ----------
+    arr: numpy.ndarray or scipy.sparse.coo_matrix
+        2D array of weighted floating-point values
+    absolute_threshold: float
+        weighted entries above this value=1, below=0
+        over-ridden if cumulative_threshold is set
+    cumulative_threshold: float
+        if specified, set absolute threshold determined by fraction of
+        total weight above this value
+    nbins: int
+        if cumulative specified, determines
+        for interpolating
+
+    Returns
+    -------
+    binary: numpy.ndarray
+        binarized mask
+
+    """
+    wmask = arr
+    if isinstance(arr, coo_matrix):
+        wmask = arr.toarray()
+    vals = wmask[np.nonzero(wmask)]
+
+    if cumulative_threshold is not None:
+        absolute_threshold = cumulative_fraction_threshold(
+                vals,
+                cumulative_threshold,
+                nbins=nbins)
+
+    binary = np.uint8(wmask > absolute_threshold)
+
+    return binary
+
+
+def sized_mask(
+        arr: Union[np.ndarray, coo_matrix], shape: Tuple[int, int] = None,
+        full: bool = False):
+    """return a 2D dense array representation of the mask, optionally
+    cropped and padded
+
+    Parameters
+    ----------
+    arr: numpy.ndarray or scipy.sparse.coo_matrix:
+        a representation of the mask
+    shape: tuple(int, int)
+        [h, w] for padded shape. If None, cropped to existing values
+    full: bool
+        if True, the full-frame array is returned
+
+    Returns
+    -------
+    mask: numpy.ndarray
+        2D dense matrix representation of the mask
+
+    """
+    if isinstance(arr, coo_matrix):
+        mask = arr.toarray()
+    else:
+        mask = arr
+    if not full:
+        mask = crop_2d_array(mask)
+        if shape is not None:
+            mask = center_pad_2d(mask, shape)
+    return mask
 
 
 class ROI:
@@ -92,102 +195,86 @@ class ROI:
                    experiment_id=segmentation_run['ophys_experiment_id'],
                    roi_id=roi_id)
 
-    def generate_binary_mask_from_threshold(self, threshold: float) -> np.array:
-        """
-        Simple binary mask from a provided threshold.
-        Args:
-            threshold: The threshold to compare values
+    def generate_ROI_mask(
+            self, shape: Tuple[int, int] = None, full: bool = False):
+        """return a 2D dense representation of the mask
 
-        Returns:
-            2D numpy array with values greater than threshold == 1 less than
-            threshold == 0
-        Notes:
-            This function will likely become deprecated as we work on more
-            applicable binary thresh holding
-        """
-        return np.uint8(self._sparse_coo.toarray() > threshold)
+        Parameters
+        ----------
+        shape: tuple(int, int)
+            [h, w] for padded shape. If None, cropped to existing values
+        full: bool
+            if True, the full-frame array is returned
 
-    def create_dilated_contour_mask(self, stroke_size: int,
-                                    threshold: float) -> np.array:
-        """
-        Returns a mask for a stroke size and threshold. An edge mask is
-        calculated from the threshold. This mask is then dilated with dilation
-        iterations for all values from 0 to stroke_size. All but the edges
-        are masked away and added to the previous edge mask.
-        This mask is then binarized where each pixel above or equal to 1
-        becomes 1. This produces a border of size stroke_size around the
-        original edge mask.
-        Args:
-            stroke_size: Value in pixels for the size of the stroke
-            threshold: Float to threshold every pixel against to generate
-            binary mask
+        Returns
+        -------
+        mask: numpy.ndarray
+            2D dense representation of the mask
 
-        Returns:
-            final_mask: the edge binary mask around the ROI where 1 is border
-            and 0 is non border
         """
-        final_mask = np.zeros(shape=self.image_shape)
-        edge_mask = self.get_edge_mask(threshold=threshold)
-        dilation_kernel = cv2.getStructuringElement(cv2.MORPH_RECT,
-                                                    ksize=(3, 3))
-        for i in range(0, stroke_size):
-            dilated_mask = np.uint8(cv2.dilate(edge_mask, dilation_kernel,
-                                    iterations=i))
-            dilated_mask = self.get_edge_mask(threshold=1,
-                                              optional_array=dilated_mask)
-            final_mask = final_mask + dilated_mask
-        final_mask = np.where(final_mask >= 1, 1, 0)
-        return final_mask
+        mask = sized_mask(self._sparse_coo.toarray(), shape=shape, full=full)
 
-    def get_edge_points(self, threshold: float,
-                        optional_array: np.array = None):
+        return mask
+
+    def generate_ROI_outline(
+            self, shape: Tuple[int, int] = None,
+            full: bool = False,
+            absolute_threshold: float = None,
+            cumulative_threshold: float = 0.9, nbins: int = 50,
+            dilation_kernel_size: int = 1, inner_outline: bool = True):
+        """return a 2D dense representation of the mask outline
+
+        Parameters
+        ----------
+        shape: tuple(int, int)
+            [h, w] for padded shape. If None, cropped to existing values
+        full: bool
+            if True, the full-frame array is returned
+        absolute_threshold: float
+            weighted entries above this value=1, below=0
+            over-ridden if cumulative_threshold is set
+        cumulative_threshold: float
+            if specified, set absolute threshold determined by fraction of
+            total weight above this value
+        nbins: int
+            if cumulative specified, determines
+            for interpolating
+        dilation_kernel_size: int
+            passed as size to cv2.getStructuringElement()
+        inner_outline: bool
+            whether to retain only outline points interior to the mask
+
+        Returns
+        -------
+        mask: numpy.ndarray
+            2D dense representation of the mask outline
+
         """
-        Returns a list of edge points. Computes edges using opencv contours
-        method. Computes the edges from thresholded binary mask.
-        Args:
-            threshold: a float to threshold all values against to create binary
-                       mask
-            optional_array: an optional array to overload the function and
-            create edge points from different mask
-        Returns:
-            Contours: a numpy array of coordinates that contain edge points
-                      (n, row, col)
-        """
-        if optional_array is None:
-            optional_array = self.generate_binary_mask_from_threshold(threshold)
-        contours, _ = cv2.findContours(optional_array,
+        binary = binary_mask_from_threshold(
+            self._sparse_coo,
+            absolute_threshold=absolute_threshold,
+            cumulative_threshold=cumulative_threshold,
+            nbins=nbins)
+
+        contours, _ = cv2.findContours(binary,
                                        cv2.RETR_LIST,
                                        cv2.CHAIN_APPROX_NONE)
-        if len(contours) > 0:
-            return np.unique(np.squeeze(np.concatenate(contours), axis=1), axis=0)
-        else:
-            logging.warning(msg=f"no edges detected for ROI: {self.roi_id} with"
-                            f" ophys_exp_id: {self.experiment_id}")
-            return np.array([])
 
-    def get_edge_mask(self, threshold: float,
-                      optional_array: np.array = None) -> np.array:
-        """
-        Returns a mask of edge points where edges of an roi are represented
-        as 1 and non edges are 0. Computes edges using binary erosion and
-        exclusive or operation. Generates edges from a thresholded binary mask.
-        Args:
-            threshold: a float to threshold all values against to create binary
-                       mask
-            optional_array: an optional array to overload the function and
-            create edge points from different mask
+        xy = np.concatenate(contours).squeeze()
 
-        Returns:
-            mask_matrix: a binary mask of the edges given a threshold
+        mask = np.zeros_like(binary)
+        mask[xy[:, 1], xy[:, 0]] = 1.0
 
-        """
-        edge_coordinates = self.get_edge_points(threshold=threshold,
-                                                optional_array=optional_array)
-        mask_matrix = np.zeros(shape=self.image_shape)
-        if len(edge_coordinates) > 0:
-            for edge_coordinate in edge_coordinates:
-                mask_matrix[edge_coordinate[1]][edge_coordinate[0]] = 1
-        return mask_matrix
+        kernel = np.ones((dilation_kernel_size, dilation_kernel_size))
+
+        mask = cv2.dilate(mask, kernel)
+
+        if inner_outline:
+            mask = mask & binary
+
+        mask = sized_mask(mask, shape=shape, full=full)
+
+        return mask
 
     def create_manifest_json(self, source_ref: str,
                              video_source_ref: str, max_source_ref: str,
