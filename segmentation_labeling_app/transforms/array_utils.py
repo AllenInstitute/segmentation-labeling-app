@@ -69,16 +69,6 @@ def content_extents(
         4-tuple of row/column boundaries
     pad_width: tuple(tuple, tuple)
         to be passed into numpy.pad as pad_width
-    target_shape: (Tuple[int, int]) Extent of array to be indexed. If None
-        padding will still handle top and left, but bottom and right padding
-        will always be zero
-
-    Returns
-    -------
-    indexing_bounds: tuple
-        4-tuple of row/column boundaries
-    pad_width: tuple(tuple, tuple)
-        to be passed into numpy.pad as pad_width
 
     """
     boundaries = content_boundary_2d(arr)
