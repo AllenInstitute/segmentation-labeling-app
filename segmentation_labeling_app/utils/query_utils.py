@@ -12,6 +12,8 @@ def get_labeling_env_vars():
     """ returns a namedtuple with fields necessary for connection to
     a postgres table. Fields are populated from environment variables
     and non-credential fields have defaults.
+    The order of the tuple contents are such that
+    query(query_string, *label_vars) is correct
     """
     try:
         user = os.environ["LABELING_USER"]
@@ -26,8 +28,8 @@ def get_labeling_env_vars():
     port = os.environ.get('LABELING_PORT', 5432)
     LabelVars = namedtuple(
             'LabelVars',
-            ['user', 'password', 'host', 'database', 'port'])
-    label_vars = LabelVars(user, password, host, database, port)
+            ['user', 'host', 'database', 'password', 'port'])
+    label_vars = LabelVars(user, host, database, password, port)
     return label_vars
 
 
