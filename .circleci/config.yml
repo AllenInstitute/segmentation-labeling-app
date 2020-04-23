@@ -11,6 +11,16 @@ jobs:
             # pytest would be a dep in requirements.txt
             python -m pytest
           name: Test
+  lint:
+    executor: python/default
+    steps:
+      - checkout
+      - python/load-cache
+      - python/install-deps
+      - run: 
+          command: |
+            python -m flake8
+
 orbs:
   python: circleci/python@0.1
 version: 2.1
@@ -18,3 +28,4 @@ workflows:
   main:
     jobs:
       - build
+      - lint
