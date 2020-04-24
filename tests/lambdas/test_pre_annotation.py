@@ -1,15 +1,12 @@
-import json
 import pytest
-from pathlib import Path
-import sys
-import segmentation_labeling_app.pre_annotation.pre_annotation_lambda as pre_annotation_lambda
+import slapp.lambdas.pre_annotation as pre_annotation_lambda
 
 
 @pytest.fixture()
 def payload_fixture(request):
     default = {
         "version": "2018-10-16",
-        "labelingJobArn": "arn:aws:sagemaker:us-east-1:123456789012:labeling-job/example-job",
+        "labelingJobArn": "arn:aws:sagemaker:us-east-1:123456789012:labeling-job/example-job",    # noqa
         "dataObject": {
             "source-ref": "dummy_uri",
             "video-source-ref": "dummy_uri",
