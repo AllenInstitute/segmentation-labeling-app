@@ -4,7 +4,7 @@ import json
 import boto3
 from moto import (mock_s3)
 
-import segmentation_labeling_app.post_annotation.post_annotation_lambda as post_annotation_lambda
+import slapp.lambdas.post_annotation as post_annotation_lambda
 
 
 @pytest.fixture()
@@ -13,19 +13,20 @@ def json_fixture():
         {
             "datasetObjectId": 'dummy_id',
             "dataObject":
-        {
-            "s3Uri": "dummy_id",
-            "content": "dummy"
-        },
+            {
+                "s3Uri": "dummy_id",
+                "content": "dummy"
+            },
             "annotations":
-            [{
-                "workerId": "dummy",
-                "annotationData":
-                {
-                    "content": '{ "name": "John", "age": 30, "car": "None" }',
-                    "s3Uri": "dummy"
-                }
-            }]
+                [{
+                    "workerId": "dummy",
+                    "annotationData":
+                    {
+                        "content":
+                            '{ "name": "John", "age": 30, "car": "None" }',
+                        "s3Uri": "dummy"
+                    }
+                }]
         }
     ]
     yield default_data
@@ -34,7 +35,7 @@ def json_fixture():
 def payload_fixture(updates: dict):
     default = {
         "version": "2018-10-16",
-        "labelingJobArn": "arn:aws:sagemaker:us-east-1:123456789012:labeling-job/example-job",
+        "labelingJobArn": "arn:aws:sagemaker:us-east-1:123456789012:labeling-job/example-job",    # noqa
         "labelCategories": ['True', 'False', 'Unknown'],
         "labelAttributeName": 'Valid Cell',
         "roleArn": "string",
@@ -56,12 +57,12 @@ def test_post_annotation_lambda(json_fixture):
 
     client = boto3.client('s3')
     client.create_bucket(Bucket="test_bucket")
-    client.put_object(Bucket="test_bucket", Key="key/file.txt", Body=json.dumps(json_fixture))
+    client.put_object(Bucket="test_bucket", Key="key/file.txt",
+                      Body=json.dumps(json_fixture))
 
     dataset = json_fixture[0]
     annotation = dataset['annotations'][0]
     new_annotation = json.loads(annotation['annotationData']['content'])
-
 
     expected_response = {
         'datasetObjectId': dataset['datasetObjectId'],
@@ -76,5 +77,6 @@ def test_post_annotation_lambda(json_fixture):
         }
     }
 
-    consolidate_response = post_annotation_lambda.lambda_handler(event=payload_fix, context=None)
+    consolidate_response = post_annotation_lambda.lambda_handler(
+        event=payload_fix, context=None)
     assert expected_response == consolidate_response[0]

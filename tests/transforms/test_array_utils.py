@@ -2,7 +2,7 @@ import pytest
 from scipy.sparse import coo_matrix
 import numpy as np
 
-from segmentation_labeling_app.transforms import array_utils as au
+from slapp.transforms import array_utils as au
 
 
 @pytest.mark.parametrize(

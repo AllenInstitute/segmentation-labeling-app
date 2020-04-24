@@ -4,7 +4,7 @@ with open('requirements.txt', 'r') as f:
     required = f.read().splitlines()
 
 setup(
-      name='segmentation_labeling_app',
+      name='slapp',
       use_scm_version=True,
       description=("Data pipeline and UI for human labeling of putative "
                    "ROIs from 2p cell segmentations"),

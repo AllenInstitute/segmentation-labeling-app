@@ -1,7 +1,7 @@
 import argschema
 import datetime
 import tempfile
-import segmentation_labeling_app.transfers.utils as utils
+import slapp.transfers.utils as utils
 
 
 class UploadSchema(argschema.ArgSchema):

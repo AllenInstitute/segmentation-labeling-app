@@ -4,7 +4,7 @@ import json
 import boto3
 from moto import mock_s3
 import os
-import segmentation_labeling_app.transfers.upload as up
+import slapp.transfers.upload as up
 
 
 @pytest.fixture(scope='module')

@@ -1,6 +1,6 @@
 import sqlite3
 import pytest
-import segmentation_labeling_app.transfers.utils as utils
+import slapp.transfers.utils as utils
 import json
 import boto3
 from moto import mock_s3
@@ -51,9 +51,9 @@ def db_file(tmpdir_factory):
 def list_of_dicts():
     letters = [i for i in string.ascii_lowercase]
     jsons = []
-    for i in range(10):
+    for _ in range(10):
         jsons.append({})
-        for j in range(20):
+        for _ in range(20):
             key = "".join(np.random.choice(letters, 10))
             value = "".join(np.random.choice(letters, 40))
             jsons[-1][key] = value
@@ -127,7 +127,7 @@ def test_get_manifests_from_db(db_file):
             "key3": "value3",
             "key4": "value4"}
     tstr = json.dumps(test_dict)
-    for i in range(4):
+    for _ in range(4):
         conn.execute(
                 "INSERT INTO manifest_table (manifest) VALUES ('%s')" % tstr)
     conn.commit()
