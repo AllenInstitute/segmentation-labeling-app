@@ -58,19 +58,15 @@ class TransformPipelineSchema(argschema.ArgSchema):
                         "include args ophys_experiment_id and "
                         "ophys_segmentation_commit_hash")
             data["segmentation_run_id"] = 12345
-            label_vars = query_utils.get_labeling_env_vars()
+
+            db_credentials = query_utils.get_labeling_db_credentials()
+            db_connection = query_utils.DbConnection(**db_credentials)
             query_string = (
                 "SELECT id FROM segmentation_runs WHERE "
                 f"ophys_experiment_id={data['ophys_experiment_id']} AND "
                 "ophys_segmentation_commit_hash="
                 f"'{data['ophys_segmentation_commit_hash']}'")
-            entries = query_utils.query(
-                    query_string,
-                    label_vars.user,
-                    label_vars.host,
-                    label_vars.database,
-                    label_vars.password,
-                    label_vars.port)
+            entries = db_connection.query(query_string)
             if len(entries) != 1:
                 raise TransformPipelineException(
                     f"{query_string} did not return exactly 1 result")
@@ -79,28 +75,27 @@ class TransformPipelineSchema(argschema.ArgSchema):
 
 
 class TransformPipeline(argschema.ArgSchemaParser):
-    default_schema = TransformPipelineSchema
+    default_schema = TransformPipelineInputSchema
 
-    def run(self):
+    def run(self, db_conn: query_utils.DbConnection):
         output_dir = Path(self.args['artifact_basedir']) / \
                      f"segmentation_run_id_{self.args['segmentation_run_id']}"
         os.makedirs(output_dir, exist_ok=True)
 
         # get all ROI ids from this segmentation run
-        dbvars = query_utils.get_labeling_env_vars()
         query_string = ("SELECT id FROM rois WHERE segmentation_run_id="
                         f"{self.args['segmentation_run_id']}")
-        entries = query_utils.query(query_string, *dbvars)
+        entries = db_conn.query(query_string)
         roi_ids = [i['id'] for i in entries]
 
         # NOTE: here could be a good place to put a pre-filtering step
 
-        rois = [ROI.roi_from_query(roi_id) for roi_id in roi_ids]
+        rois = [ROI.roi_from_query(roi_id, db_conn) for roi_id in roi_ids]
 
         # load, downsample and project the source video
         query_string = ("SELECT * FROM segmentation_runs "
                         f"WHERE id={self.args['segmentation_run_id']}")
-        seg_query = query_utils.query(query_string, *dbvars)[0]
+        seg_query = db_conn.query(query_string)[0]
         source_path = Path(seg_query['source_video_path'])
         downsampled_video = downsample_h5_video(source_path)
         max_projection = np.max(downsampled_video, axis=0)
@@ -155,5 +150,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
 
 if __name__ == "__main__":  # pragma: no cover
+    db_credentials = query_utils.get_labeling_db_credentials()
+    db_connection = query_utils.DbConnection(**db_credentials)
+
     pipeline = TransformPipeline()
-    pipeline.run()
+    pipeline.run(db_connection)
