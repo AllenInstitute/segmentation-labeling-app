@@ -48,25 +48,28 @@ class DbConnection():
         self.password = password
         self.port = port
 
+    @staticmethod
     def _connect(user, host, database, password, port):
         conn = pg8000.connect(user=user, host=host, database=database,
                               password=password, port=port)
         return conn, conn.cursor()
 
+    @staticmethod
     def _select(cursor, query):
         cursor.execute(query)
         columns = [d[0].decode("utf-8") for d in cursor.description]
         return [dict(zip(columns, c)) for c in cursor.fetchall()]
 
     def query(self, query):
-        conn, cursor = _connect(self.user, self.host, self.database,
-                                self.password, self.port)
+        conn, cursor = DbConnection._connect(self.user, self.host,
+                                             self.database,
+                                             self.password, self.port)
 
         # Guard against non-ascii characters in query
         query = ''.join([i if ord(i) < 128 else ' ' for i in query])
 
         try:
-            results = _select(cursor, query)
+            results = DbConnection._select(cursor, query)
         finally:
             cursor.close()
             conn.close()

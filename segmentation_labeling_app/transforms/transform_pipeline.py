@@ -75,7 +75,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
 
 
 class TransformPipeline(argschema.ArgSchemaParser):
-    default_schema = TransformPipelineInputSchema
+    default_schema = TransformPipelineSchema
 
     def run(self, db_conn: query_utils.DbConnection):
         output_dir = Path(self.args['artifact_basedir']) / \
