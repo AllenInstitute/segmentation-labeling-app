@@ -2,6 +2,7 @@ import argschema
 import marshmallow as mm
 from pathlib import Path
 import os
+import json
 import imageio
 import numpy as np
 import segmentation_labeling_app.utils.query_utils as query_utils
@@ -74,6 +75,13 @@ class TransformPipelineSchema(argschema.ArgSchema):
         return data
 
 
+def save_manifest(manifest: dict, output_dir: Path):
+    manifest_path = output_dir / f"manifest_{manifest['roi-id']}.json"
+
+    with manifest_path.open('w') as f:
+        json.dump(manifest, f)
+
+
 class TransformPipeline(argschema.ArgSchemaParser):
     default_schema = TransformPipelineSchema
 
@@ -99,7 +107,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         source_path = Path(seg_query['source_video_path'])
         downsampled_video = downsample_h5_video(source_path)
         max_projection = np.max(downsampled_video, axis=0)
-        ave_projection = np.mean(downsampled_video, axis=0)
+        avg_projection = np.mean(downsampled_video, axis=0)
 
         # create the per-ROI artifacts
         for roi in rois:
@@ -108,7 +116,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             outline_path = output_dir / f"outline_{roi.roi_id}.png"
             sub_video_path = output_dir / f"video_{roi.roi_id}.mp4"
             max_proj_path = output_dir / f"max_{roi.roi_id}.png"
-            ave_proj_path = output_dir / f"ave_{roi.roi_id}.png"
+            avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
 
             mask = roi.generate_ROI_mask(
                     shape=self.args['cropped_shape'])
@@ -127,26 +135,28 @@ class TransformPipeline(argschema.ArgSchemaParser):
             sub_video = np.pad(
                     downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
                     ((0, 0), *pads))
-            transform_to_mp4(sub_video, sub_video_path, 10)
+            transform_to_mp4(sub_video, str(sub_video_path), 10)
 
             # sub-projections
             sub_max = np.pad(
                     max_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
             sub_ave = np.pad(
-                    ave_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
+                    avg_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
             imageio.imsave(max_proj_path, sub_max)
-            imageio.imsave(ave_proj_path, sub_ave)
+            imageio.imsave(avg_proj_path, sub_ave)
 
             # manifest entry creation
             manifest = {}
             manifest['experiment-id'] = seg_query['ophys_experiment_id']
             manifest['roi-id'] = roi.roi_id
-            manifest['source-ref'] = outline_path
-            manifest['roi-mask-source-ref'] = mask_path
-            manifest['video-source-ref'] = sub_video_path
-            manifest['max-source-ref'] = max_proj_path
-            manifest['avg-source-ref'] = ave_proj_path
+            manifest['source-ref'] = str(outline_path)
+            manifest['roi-mask-source-ref'] = str(mask_path)
+            manifest['video-source-ref'] = str(sub_video_path)
+            manifest['max-source-ref'] = str(max_proj_path)
+            manifest['avg-source-ref'] = str(avg_proj_path)
             # manifest['trace-source-ref'] =
+
+            save_manifest(manifest, output_dir)
 
 
 if __name__ == "__main__":  # pragma: no cover
