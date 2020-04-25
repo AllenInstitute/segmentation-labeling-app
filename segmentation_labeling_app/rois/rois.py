@@ -124,7 +124,8 @@ class ROI:
                                       shape=image_shape)
 
     @classmethod
-    def roi_from_query(cls, roi_id: int) -> "ROI":
+    def roi_from_query(cls, roi_id: int,
+                       db_conn: query_utils.DbConnection) -> "ROI":
         """
         Queries and builds ROI object by querying LIMS table for
         produced labeling ROIs.
@@ -133,24 +134,12 @@ class ROI:
 
         Returns: ROI object for the given segmentation_id and roi_id
         """
-        label_vars = query_utils.get_labeling_env_vars()
 
-        roi = query_utils.query(
-            f"SELECT * FROM rois WHERE id={roi_id}",
-            user=label_vars.user,
-            host=label_vars.host,
-            database=label_vars.database,
-            port=label_vars.port,
-            password=label_vars.password)[0]
+        roi = db_conn.query(f"SELECT * FROM rois WHERE id={roi_id}")[0]
 
-        segmentation_run = query_utils.query(
+        segmentation_run = db_conn.query(
             ("SELECT * FROM segmentation_runs WHERE "
-             f"id={roi['segmentation_run_id']}"),
-            user=label_vars.user,
-            host=label_vars.host,
-            database=label_vars.database,
-            port=label_vars.port,
-            password=label_vars.password)[0]
+             f"id={roi['segmentation_run_id']}"))[0]
 
         return ROI(coo_rows=roi['coo_row'],
                    coo_cols=roi['coo_col'],
