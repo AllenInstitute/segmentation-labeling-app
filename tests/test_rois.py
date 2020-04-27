@@ -114,7 +114,7 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
     assert np.all(sized == expected)
 
 
-@pytest.mark.parametrize("mask, full, shape, expected", [
+@pytest.mark.parametrize("mask, full, shape, , trace, expected", [
     (
         # full=False and shape=None will just
         # crop to the data
@@ -125,6 +125,7 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
             [0.0, 0.0, 0.0, 0.0]]),
         False,
         None,
+        [1.234, 2.345, 3.456, 4.567, 6.789],
         np.array([
             [1.0, 1.0],
             [1.0, 1.0]])),
@@ -138,6 +139,7 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
             [0.0, 0.0, 0.0, 0.0]]),
         True,
         None,
+        [1.234, 2.345, 3.456, 4.567, 6.789],
         np.array([
             [0.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 1.0, 0.0],
@@ -155,6 +157,7 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
             [0.0, 0.0, 0.0, 0.0]]),
         False,
         (5, 5),
+        [1.234, 2.345, 3.456, 4.567, 6.789],
         np.array([
             [0.0, 0.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 1.0, 0.0, 0.0],
@@ -172,6 +175,7 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
             [0.0, 0.0, 0.0, 0.0]]),
         False,
         (6, 6),
+        [1.234, 2.345, 3.456, 4.567, 6.789],
         np.array([
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -181,7 +185,7 @@ def test_sized_mask(mask, full, shape, expected, use_coo):
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]),
         ),
     ])
-def test_roi_generate_mask(mask, shape, full, expected):
+def test_roi_generate_mask(mask, shape, full, trace, expected):
     coo = coo_matrix(mask)
     roi = roi_module.ROI(
             coo.row,
@@ -189,9 +193,11 @@ def test_roi_generate_mask(mask, shape, full, expected):
             coo.data,
             image_shape=(4, 4),
             experiment_id=1234,
-            roi_id=4567)
+            roi_id=4567,
+            trace=trace)
     roi_mask = roi.generate_ROI_mask(shape=shape, full=full)
     assert np.all(roi_mask == expected)
+    assert np.all(trace == roi.trace)
 
 
 @pytest.mark.parametrize(
@@ -249,7 +255,8 @@ def test_roi_generate_outline(weighted, full, expected, athresh, quantile):
             coo.data,
             image_shape=weighted.shape,
             experiment_id=1234,
-            roi_id=4567)
+            roi_id=4567,
+            trace=[1.234, 2.345, 3.456, 4.567, 6.789])
     outline = roi.generate_ROI_outline(
             full=full,
             absolute_threshold=athresh,
@@ -280,8 +287,14 @@ def test_roi_manifest_json(coo_rows, coo_cols, coo_data, video_shape,
                            video_source_ref, max_source_ref,
                            avg_source_ref, trace_source_ref,
                            roi_data_source_ref, expected_manifest):
-    test_roi = roi_module.ROI(coo_rows, coo_cols, coo_data,
-                              video_shape, segmentation_id, roi_id)
+    test_roi = roi_module.ROI(
+            coo_rows,
+            coo_cols,
+            coo_data,
+            video_shape,
+            segmentation_id,
+            roi_id,
+            trace=[1, 2, 3.1415, 4, 5, 6])
     test_manifest = test_roi.create_manifest_json(
             source_ref=source_ref,
             video_source_ref=video_source_ref,

@@ -116,12 +116,15 @@ class ROI:
                  coo_data: Union[np.array, List[float]],
                  image_shape: Tuple[int, int],
                  experiment_id: int,
-                 roi_id: int):
+                 roi_id: int,
+                 trace: Union[np.array, List[float]] = None,
+                 ):
         self.image_shape = image_shape
         self.experiment_id = experiment_id
         self.roi_id = roi_id
         self._sparse_coo = coo_matrix((coo_data, (coo_rows, coo_cols)),
                                       shape=image_shape)
+        self.trace = trace
 
     @classmethod
     def roi_from_query(cls, roi_id: int,
@@ -141,12 +144,21 @@ class ROI:
             ("SELECT * FROM segmentation_runs WHERE "
              f"id={roi['segmentation_run_id']}"))[0]
 
+        # NOTE: temporary legacy support for no traces
+        # will remove and delete legacy traceless ROI
+        # entries when all agreed.
+        trace = None
+        if 'trace' in roi:
+            trace = roi['trace']
+
         return ROI(coo_rows=roi['coo_row'],
                    coo_cols=roi['coo_col'],
                    coo_data=roi['coo_data'],
                    image_shape=segmentation_run['video_shape'],
                    experiment_id=segmentation_run['ophys_experiment_id'],
-                   roi_id=roi_id)
+                   roi_id=roi_id,
+                   trace=trace
+                   )
 
     def generate_ROI_mask(
             self, shape: Tuple[int, int] = None, full: bool = False):
