@@ -24,7 +24,8 @@ def lambda_handler(event, context) -> dict:
 
     for dataset in annotations:
         for annotation in dataset['annotations']:
-            new_annotation = json.loads(annotation['annotationData']['content'])
+            new_annotation = json.loads(
+                annotation['annotationData']['content'])
             label = {
                 'datasetObjectId': dataset['datasetObjectId'],
                 'consolidatedAnnotation': {
