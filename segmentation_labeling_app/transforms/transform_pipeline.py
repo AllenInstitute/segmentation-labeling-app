@@ -8,7 +8,7 @@ import numpy as np
 import segmentation_labeling_app.utils.query_utils as query_utils
 from segmentation_labeling_app.rois.rois import ROI
 from segmentation_labeling_app.transforms.transformations import (
-        downsample_h5_video, transform_to_mp4)
+        downsample_array, downsample_h5_video, transform_to_mp4)
 from segmentation_labeling_app.transforms.array_utils import (
         content_extents)
 
@@ -44,6 +44,23 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=True,
         default=0.1,
         description=("quantile threshold for outlining an ROI. "))
+    input_fps = argschema.fields.Int(
+        required=False,
+        default=31,
+        description="frames per second of input movie")
+    output_fps = argschema.fields.Int(
+        required=False,
+        default=4,
+        description="frames per second of downsampled movie")
+    downsampling_strategy = argschema.fields.Str(
+        required=False,
+        default="average",
+        validator=mm.validate.OneOf(['average', 'first', 'last', 'random']),
+        description="what downsampling strategy to apply to movie and trace")
+    random_seed = argschema.fields.Int(
+        required=False,
+        default=0,
+        description="random seed to use if downsampling strategy is 'random'")
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -96,8 +113,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         entries = db_conn.query(query_string)
         roi_ids = [i['id'] for i in entries]
 
-        # NOTE: here could be a good place to put a pre-filtering step
-
+        # NOTE: here could be a good place to put a pre-filtering stepw
         rois = [ROI.roi_from_query(roi_id, db_conn) for roi_id in roi_ids]
 
         # load, downsample and project the source video
@@ -105,7 +121,11 @@ class TransformPipeline(argschema.ArgSchemaParser):
                         f"WHERE id={self.args['segmentation_run_id']}")
         seg_query = db_conn.query(query_string)[0]
         downsampled_video = downsample_h5_video(
-                Path(seg_query['source_video_path']))
+                Path(seg_query['source_video_path']),
+                self.args['input_fps'],
+                self.args['output_fps'],
+                self.args['downsampling_strategy'],
+                self.args['random_seed'])
         max_projection = np.max(downsampled_video, axis=0)
         avg_projection = np.mean(downsampled_video, axis=0)
 
@@ -117,6 +137,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             sub_video_path = output_dir / f"video_{roi.roi_id}.mp4"
             max_proj_path = output_dir / f"max_{roi.roi_id}.png"
             avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
+            trace_path = output_dir / f"trace_{roi.roi_id}.json"
 
             mask = roi.generate_ROI_mask(
                     shape=self.args['cropped_shape'])
@@ -145,6 +166,21 @@ class TransformPipeline(argschema.ArgSchemaParser):
             imageio.imsave(max_proj_path, sub_max)
             imageio.imsave(avg_proj_path, sub_ave)
 
+            # trace
+            trace = downsample_array(
+                    roi['trace'],
+                    self.args['input_fps'],
+                    self.args['output_fps'],
+                    self.args['downsampling_strategy'],
+                    self.args['random_seed']).tolist()
+            trace_json = {
+                    "pointStart": 0,
+                    "pointInterval": 1.0 / self.args['output_fps'],
+                    "dataLength": len(trace),
+                    "trace": trace}
+            with open(trace_path, "w") as fp:
+                json.dump(trace_json, fp)
+
             # manifest entry creation
             manifest = {}
             manifest['experiment-id'] = seg_query['ophys_experiment_id']
@@ -154,7 +190,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['video-source-ref'] = str(sub_video_path)
             manifest['max-source-ref'] = str(max_proj_path)
             manifest['avg-source-ref'] = str(avg_proj_path)
-            # manifest['trace-source-ref'] =
+            manifest['trace-source-ref'] = str(trace_path)
 
             save_manifest(manifest, output_dir)
 

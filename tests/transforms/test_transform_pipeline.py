@@ -43,7 +43,8 @@ def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
         "roi-mask-source-ref": f"{save_path}/{out_dirname}/mask_{roi_id}.png",
         "video-source-ref": f"{save_path}/{out_dirname}/video_{roi_id}.mp4",
         "max-source-ref": f"{save_path}/{out_dirname}/max_{roi_id}.png",
-        "avg-source-ref": f"{save_path}/{out_dirname}/avg_{roi_id}.png"
+        "avg-source-ref": f"{save_path}/{out_dirname}/avg_{roi_id}.png",
+        "trace-source-ref": f"{save_path}/{out_dirname}/trace_{roi_id}.json"
     }
     return expected_manifest
 
@@ -56,7 +57,11 @@ def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
       "ophys_segmentation_commit_hash": "Marvin",
       "artifact_basedir": "replace_me_with_a_tmp_path",
       "cropped_shape": [20, 20],
-      "quantile": 0.2},
+      "quantile": 0.2,
+      "input_fps": 31,
+      "output_fps": 4,
+      "downsampling_strategy": 'average',
+      "random_seed": 0},
 
      {"SELECT id FROM rois WHERE segmentation_run_id=42": [
          {"id": 0}, {"id": 777}],
@@ -102,7 +107,12 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     pipeline.run(mock_db_conn_fixture)
 
     # Assert downsample called with correct video path
-    mock_downsample_h5_video.assert_called_once_with(Path(source_video))
+    mock_downsample_h5_video.assert_called_once_with(
+            Path(source_video),
+            input_data['input_fps'],
+            input_data['output_fps'],
+            input_data['downsampling_strategy'],
+            input_data['random_seed'])
 
     # Assert imsaves are called with correct save paths (and in correct order)
     for manifest in expected_manifests:
