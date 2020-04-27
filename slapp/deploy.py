@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 import time
 
-import boto3
 import git
 import sys
 
@@ -43,6 +42,7 @@ def deploy_lambdas(deploy_dir, name, region, prefix, bucket=None):
                 raise SystemError
     except SystemError:
         sys.exit(1)
+
 
 if __name__ == "__main__":
     args = parser.parse_args()
