@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SAM template for lambdas used to process annotations from SageMaker GT Labeling
+Globals:
+  Function:
+    Timeout: 60
+
+Resources:
+  PostAnnotationLabelingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: post_annotation.lambda_handler
+      Runtime: python3.7
+      Role:
+        'Fn::GetAtt':
+          - LambdaExecutionRole
+          - Arn
+      CodeUri: ./slapp/lambdas/
+  PreAnnotationLabelingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: pre_annotation.lambda_handler
+      Role:
+        'Fn::GetAtt':
+          - LambdaExecutionRole
+          - Arn
+      CodeUri: ./slapp/lambdas
+      Runtime: python3.7
+  LambdaExecutionRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchEventsFullAccess'
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Effect: Allow
+                Resource: [
+                    "arn:aws:s3:::*SageMaker*",
+                    "arn:aws:s3:::*Sagemaker*",
+                    "arn:aws:s3:::*sagemaker*"
+                ]
+            Version: '2012-10-17'
+          PolicyName: root
+    Type: 'AWS::IAM::Role'
+
+Outputs:
+  PreAnnotationLabelingFunction:
+    Description: "SageMaker GroundTruth pre-processing Lambda."
+    Value: !GetAtt PreAnnotationLabelingFunction.Arn
+
+  PostAnnotationLabelingFunction:
+      Description: "SageMaker GroundTruth annotation consolidation lambda."
+      Value: !GetAtt PostAnnotationLabelingFunction.Arn
