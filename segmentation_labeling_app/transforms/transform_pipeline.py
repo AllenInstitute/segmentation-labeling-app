@@ -5,10 +5,11 @@ import os
 import json
 import imageio
 import numpy as np
+import h5py
 import segmentation_labeling_app.utils.query_utils as query_utils
 from segmentation_labeling_app.rois.rois import ROI
 from segmentation_labeling_app.transforms.transformations import (
-        downsample_h5_video, transform_to_mp4)
+        downsample_array, transform_to_mp4)
 from segmentation_labeling_app.transforms.array_utils import (
         content_extents)
 
@@ -104,8 +105,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
         query_string = ("SELECT * FROM segmentation_runs "
                         f"WHERE id={self.args['segmentation_run_id']}")
         seg_query = db_conn.query(query_string)[0]
-        source_path = Path(seg_query['source_video_path'])
-        downsampled_video = downsample_h5_video(source_path)
+        with h5py.File(seg_query['source_video_path'], 'r') as h5f:
+            downsampled_video = downsample_array(h5f)
         max_projection = np.max(downsampled_video, axis=0)
         avg_projection = np.mean(downsampled_video, axis=0)
 

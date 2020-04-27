@@ -1,5 +1,3 @@
-import os
-
 import pytest
 import numpy as np
 import cv2
@@ -13,106 +11,110 @@ test_video = np.stack([test_frame]*2, axis=0)
 
 @pytest.fixture()
 def video_fixture():
-    np.random.seed(0)
-    random_video = np.array(
+    video = np.array(
         [[[5, 5], [5, 5]], [[2, 2], [2, 2]],
          [[4, 4], [4, 4]], [[0, 0], [0, 0]],
          [[3, 2], [10, 7]], [[11, 1], [0, 5]],
          [[8, 2], [12, 1]], [[6, 3], [2, 8]],
          [[11, 3], [1, 17]], [[8, 3], [9, 0]]]
     )
-    yield random_video
+    yield video
 
 
-@pytest.mark.parametrize(("input_fps, output_fps, random_seed, strategy, "
-                          "expected_video"), [(10, 2, 10, 'random',
-                                              np.array([[[3, 2], [10, 7]],
-                                                        [[11, 1], [0, 5]]])),
-                                              (10, 2, 10, 'maximum',
-                                               np.array([[[5, 5], [10, 7]],
-                                                         [[11, 3], [12, 17]]])),
-                                              (10, 2, 10, 'average',
-                                               np.array([[[2.8, 2.6], [4.2, 3.6]],
-                                                         [[8.8, 2.4], [4.8, 6.2]]])),
-                                              (10, 2, 10, 'first',
-                                               np.array([[[5, 5], [5, 5]],
-                                                         [[11, 1], [0, 5]]])),
-                                              (10, 2, 10, 'last',
-                                               np.array([[[3, 2], [10, 7]],
-                                                         [[8, 3], [9, 0]]])),
-                                               (10, 3, 10, 'random',
-                                                np.array([[[5, 5], [5, 5]],
-                                                          [[11, 1], [0, 5]],
-                                                          [[11, 3], [1, 17]]])),
-                                               (10, 3, 10, 'maximum',
-                                                np.array([[[5, 5], [5, 5]],
-                                                          [[11, 2], [12, 7]],
-                                                          [[11, 3], [9, 17]]])),
-                                               (10, 6, 10, 'average',
-                                                np.array([[[3.5, 3.5], [3.5, 3.5]],
-                                                          [[2, 2], [2, 2]],
-                                                          [[7, 1.5], [5, 6]],
-                                                          [[7, 2.5], [7, 4.5]],
-                                                          [[11, 3], [1, 17]],
-                                                          [[8, 3], [9, 0]]])),
-                                               (10, 3, 10, 'first',
-                                                np.array([[[5, 5], [5, 5]],
-                                                          [[3, 2], [10, 7]],
-                                                          [[6, 3], [2, 8]]])),
-                                               (10, 3, 10, 'last',
-                                                np.array([[[0, 0], [0, 0]],
-                                                          [[8, 2], [12, 1]],
-                                                          [[8, 3], [9, 0]]]))])
-def test_video_downsampling(input_fps, output_fps, random_seed, strategy,
-                            expected_video, video_fixture):
-    """
-    Test Cases:
-        1) Random selection of uniform sized subsets
-        2) Maximum selection of uniform sized subsets
-        3) Average selection of uniform sized subsets
-        4) First selection of uniform sized subsets
-        5) Last selection of uniform sized subsets
-        6) Random selection of non uniform sized subsets
-        7) Maximum selection of non uniform sized subsets
-        8) Average selection of non uniform sized subsets
-        9) First selection of non uniform sized subsets
-        10) Last selection of non uniform sized subsets
-    """
-    new_video = transformations._downsample_array(full_array=video_fixture,
-                                                  input_fps=input_fps,
-                                                  output_fps=output_fps,
-                                                  strategy=strategy,
-                                                  random_seed=random_seed)
-    assert np.array_equal(expected_video, new_video)
+@pytest.mark.parametrize(
+        ("array, input_fps, output_fps, random_seed, strategy, expected"),
+        [
+            (
+                # random downsample 1D array
+                np.array([1, 4, 6, 2, 3, 5, 11]),
+                7, 2, 0, 'random',
+                np.array([2, 5])),
+            (
+                # random downsample ND array
+                np.array([
+                    [1, 3], [4, 4], [6, 8], [2, 1], [3, 2],
+                    [5, 8], [11, 12]]),
+                7, 2, 0, 'random',
+                np.array([[2, 1], [5, 8]])),
+            (
+                # first downsample 1D array
+                np.array([1, 4, 6, 2, 3, 5, 11]),
+                7, 2, 0, 'first',
+                np.array([1, 3])),
+            (
+                # random downsample ND array
+                np.array([
+                    [1, 3], [4, 4], [6, 8], [2, 1], [3, 2],
+                    [5, 8], [11, 12]]),
+                7, 2, 0, 'first',
+                np.array([[1, 3], [3, 2]])),
+            (
+                # last downsample 1D array
+                np.array([1, 4, 6, 2, 3, 5, 11]),
+                7, 2, 0, 'last',
+                np.array([2, 11])),
+            (
+                # last downsample ND array
+                np.array([
+                    [1, 3], [4, 4], [6, 8], [2, 1], [3, 2],
+                    [5, 8], [11, 12]]),
+                7, 2, 0, 'last',
+                np.array([[2, 1], [11, 12]])),
+            (
+                # average downsample 1D array
+                np.array([1, 4, 6, 2, 3, 5, 11]),
+                7, 2, 0, 'average',
+                np.array([13/4, 19/3])),
+            (
+                # average downsample ND array
+                np.array([
+                    [1, 3], [4, 4], [6, 8], [2, 1], [3, 2],
+                    [5, 8], [11, 12]]),
+                7, 2, 0, 'average',
+                np.array([[13/4, 4], [19/3, 22/3]])),
+            (
+                # maximum downsample 1D array
+                np.array([1, 4, 6, 2, 3, 5, 11]),
+                7, 2, 0, 'maximum',
+                np.array([6, 11])),
+            ])
+def test_downsample(array, input_fps, output_fps, random_seed, strategy,
+                    expected):
+    array_out = transformations.downsample_array(
+            array=array,
+            input_fps=input_fps,
+            output_fps=output_fps,
+            strategy=strategy,
+            random_seed=random_seed)
+    assert np.array_equal(expected, array_out)
 
 
-# @pytest.mark.parametrize(("coordinate_pair, window_size, video_shape,"
-#                           "expected_pair"), [
-#                         ((0, 9), (10, 10), (512, 512), (4, 9)),
-#                         ((9, 0), (10, 10), (512, 512), (9, 4)),
-#                         ((511, 4), (10, 10), (512, 512), (506, 4)),
-#                         ((4, 511), (10, 10), (512, 512), (4, 506)),
-#                         ((5, 5), (3, 3), (5, 5), (3, 3)),
-#                         ((-1, 2), (3, 3), (5, 5), (1, 2))])
-# def test_coordinate_window_shift(coordinate_pair, window_size, video_shape,
-#                                  expected_pair):
-#     transformed_center = transformations.get_transformed_center(coordinate_pair,
-#                                                                      window_size,
-#                                                                      video_shape)
-#     assert transformed_center == expected_pair
-
-
-# @pytest.mark.parametrize(("coordinate_pair, window_size, video_shape,"
-#                           "expected_pair"),[
-#                         ((3, 3), (600, 600), (512, 512), None)
-#                         ])
-# def test_coordinate_shift_exception(coordinate_pair, window_size, video_shape,
-#                                     expected_pair):
-#     with pytest.raises(ValueError):
-#         transformed_center = transformations.get_transformed_center(coordinate_pair,
-#                                                                     window_size,
-#                                                                     video_shape)
-#         assert transformed_center == expected_pair
+@pytest.mark.parametrize(
+        ("array, input_fps, output_fps, random_seed, strategy, expected"),
+        [
+            (
+                # upsampling not defined
+                np.array([1, 4, 6, 2, 3, 5, 11]),
+                7, 11, 0, 'maximum',
+                np.array([6, 11])),
+            (
+                # maximum downsample ND array
+                # not defined
+                np.array([
+                    [1, 3], [4, 4], [6, 8], [2, 1], [3, 2],
+                    [5, 1234], [11, 12]]),
+                7, 2, 0, 'maximum',
+                np.array([[6, 8], [11, 12]])),
+            ])
+def test_downsample_exceptions(array, input_fps, output_fps, random_seed,
+                               strategy, expected):
+    with pytest.raises(ValueError):
+        transformations.downsample_array(
+                array=array,
+                input_fps=input_fps,
+                output_fps=output_fps,
+                strategy=strategy,
+                random_seed=random_seed)
 
 
 def test_mp4_conversion(video_fixture, tmp_path):
