@@ -16,4 +16,3 @@ argschema==2.0.1
 jsonlines
 opencv-python
 flake8
-gitpython
