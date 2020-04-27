@@ -11,47 +11,68 @@ This tool is important for internal use at the Allen Institute. Because it's des
 
 # Steps to deploy on Sagemaker Ground Truth
 
-## Deploying pre annotation lambda handler
+## Deploy Lambdas
+From the top level directory, run:
 
-### Creating package
-From upper level directory run the command
 ```console
-sam package --s3-bucket <uri> --template-file templates/pre-annotation-template.yaml
---output-template-file templates/packaged-pre-annotation-template.yaml
+sam build
+sam deploy
 ```
-This command packages the labmda function into a template that can be built
-and deployed through SAM deploy command
 
-### Deploying package
-From same level run the command
-```console
-sam deploy --stack-name <stack-name> --template-file templates/packaged-pre-annotation-template.yaml
---capabilities CAPABILITY_IAM
+This will deploy the lambda stack with the following values:
 ```
-This builds and deploys the lambda function to the AWS account linked through
-the AWS CLI. It associates it with the stack-name or creates a new stack with
-provided name. You can specify a role by providing the --role argument.
-
-## Deploying post annotation lambda handler
-
-### Creating package
-From upper level directory run the command
-```console
-sam package --s3-bucket <uri> --template-file templates/post-annotation-template.yaml
---output-template-file templates/packaged-post-annotation-template.yaml
+Stack name                 : gt-lambdas
+Region                     : us-west-2
+Confirm changeset          : True
+Deployment s3 bucket       : aws-sam-cli-managed-default-samclisourcebucket-1jbjkzibjwsu5
+Capabilities               : ["CAPABILITY_IAM"]
 ```
-This command packages the labmda function into a template that can be built
-and deployed through SAM deploy command
 
-### Deploying package
-From same level run the command
-```console
-sam deploy --stack-name <stack-name> --template-file templates/packaged-post-annotation-template.yaml
---capabilities CAPABILITY_IAM
-```
-This builds and deploys the lambda function to the AWS account linked through
-the AWS CLI. It associates it with the stack-name or creates a new stack with
-provided name. You can specify a role by providing the --role argument.
+To change these default values, see the documentation for `sam deploy`,
+or use `sam deploy --guided` to deploy in guided mode.
+
+## Create SageMaker Ground Truth Job
+
+### Create Private Workforce
+If you want to use a private labelling workforce (that doesn't already exist), you'll need to create it ahead of time. The easist way to do this is through the console.
+
+1. Access SageMaker through the AWS Console
+2. Ground Truth > Labeling Workforces > Private > Create private team
+3. Follow the instructions in the console to finish team creation
+
+Once you create the team, you'll need to add workers to it. 
+
+1. Access SageMaker through the AWS Console
+2. Ground Truth > Labeling Workforces > Private
+3. Under Workers, click "Invite new workers"
+4. Add the email addresses of the workers you want to invite
+5. Go back to SageMaker > Ground Truth > Labeling Workforces > Private
+6. Click on the name of the team you want to add the user to, under Private Teams
+7. Under the summary, click on the Workers tab
+8. Select "Add workers to team". You should see the users you invited in step 4.
+
+
+### Collect Input Data
+Prior to creating a labeling job, ensure the following:
+1. All data required for the labeling job are uploaded to an s3 bucket 
+2. A json manifest file in the [proper format](https://docs.aws.amazon.com/sagemaker/latest/dg/sms-data-input.html) specifies the inputs to be labeled is uploaded to s3
+3. If you want to save your annotation data in a separate bucket, ensure that bucket is created.
+
+Note that the region of the Sagemaker GT Job and S3 buckets must be the same.
+
+### Create Job via Console
+1. Access SageMaker through the AWS Console
+2. Ground Truth > Labeling Jobs > Create Labeling Job
+3. Follow the prompts to provide your input data manifest, output data location, etc.
+4. For Task Type, choose "Custom" from the dropdown menu
+5. Click "next"
+6. Under "Workers", click "Private"
+7. Select your private team from the dropdown menu below, and follow the rest of the instructions for timeout and workers per task
+8. Under Templates, "Custom" should be selected from the dropdown menu, and you should see a form field with some boilerplate html code
+9. Copy the contents of `slapp/app/index.html` into the form box
+10. Select your Lambda functions. If you used the default values for deployment during the [deploy lambdas](##deploy-lambdas) step, then the relevant Lambdas should be named "gt-lambdas-PreAnnotationLabelingFunction-\<id\>"
+and "gt-lambdas-PostAnnotationLabelingFunction-\<id\>".
+11. Click "Create"
 
 # User Interface
 
