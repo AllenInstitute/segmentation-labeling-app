@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import ANY, call, MagicMock
 from pathlib import Path
 from functools import partial
-
+import os
 import numpy as np
 
 from segmentation_labeling_app.transforms import transform_pipeline
@@ -15,12 +15,12 @@ def mock_db_conn_fixture(request):
     def mock_query(query_string):
         return query_return_values[query_string]
 
-    def mock_insert(statement):
+    def mock_insert(statements):
         return
 
     mock_db_conn = MagicMock()
     mock_db_conn.query.side_effect = mock_query
-    mock_db_conn.insert.side_effect = mock_insert
+    mock_db_conn.bulk_insert.side_effect = mock_insert
     return mock_db_conn
 
 
@@ -104,6 +104,7 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     mpatcher(name="transform_to_mp4", value=mock_transform_to_mp4)
     mpatcher(name="np", value=mock_np)
 
+    os.environ['TRANSFORM_HASH'] = 'dummy_hash'
     pipeline = transform_pipeline.TransformPipeline(input_data=input_data,
                                                     args=[])
     pipeline.run(mock_db_conn_fixture)
