@@ -2,21 +2,15 @@ import argschema
 import datetime
 import tempfile
 import slapp.transfers.utils as utils
+import slapp.utils.query_utils as query_utils
 
 
 class UploadSchema(argschema.ArgSchema):
-    sqlite_db_file = argschema.fields.InputFile(
+    roi_manifests_ids = argschema.fields.List(
+        argschema.fields.Int,
         required=True,
-        description="sqllite input db file")
-    sql_table = argschema.fields.Str(
-        required=False,
-        missing="manifest_table",
-        description="table where the manifests are stored")
-    sql_filter = argschema.fields.Str(
-        required=False,
-        default="",
-        missing="",
-        description="SQL query filter, starting with 'WHERE'")
+        description=("specifies the values of roi_manifests.ids "
+                     "to include in the upload"))
     s3_bucket_name = argschema.fields.Str(
         required=True,
         description="destination bucket name")
@@ -35,15 +29,15 @@ class UploadSchema(argschema.ArgSchema):
 class LabelDataUploader(argschema.ArgSchemaParser):
     default_schema = UploadSchema
 
-    def run(self):
+    def run(self, db_conn: query_utils.DbConnection):
         # unique timestamp for this invocation
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
         # get the specified per-ROI manifests
-        manifests = utils.get_manifests_from_db(
-                self.args['sqlite_db_file'],
-                self.args['sql_table'],
-                sql_filter=self.args['sql_filter'])
+        idstr = repr(self.args['roi_manifests_ids'])[1:-1]
+        query_string = ("SELECT manifest FROM roi_manifests "
+                        f"WHERE id in ({idstr})")
+        manifests = [r['manifest'] for r in db_conn.query(query_string)]
 
         # upload the per-ROI manifests
         prefix = self.args['prefix']
@@ -68,5 +62,8 @@ class LabelDataUploader(argschema.ArgSchemaParser):
 
 
 if __name__ == "__main__":  # pragma: no cover
+    db_credentials = query_utils.get_labeling_db_credentials()
+    db_connection = query_utils.DbConnection(**db_credentials)
+
     ldu = LabelDataUploader()
-    ldu.run()
+    ldu.run(db_connection)

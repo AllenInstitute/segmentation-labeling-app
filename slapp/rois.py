@@ -1,31 +1,11 @@
 from typing import List, Tuple, Union
-import json
-from pathlib import Path
 from scipy.sparse import coo_matrix
 import numpy as np
 import cv2
-import sqlite3
 
 import slapp.utils.query_utils as query_utils
 from slapp.transforms.array_utils import (
         center_pad_2d, crop_2d_array)
-
-
-sql_create_rois_table = """ CREATE TABLE IF NOT EXISTS rois_prelabeling (
-                            id integer PRIMARY KEY,
-                            transform_hash text NOT NULL,
-                            ophys_segmentation_commit_hash text NOT NULL,
-                            creation_date text NOT NULL,
-                            upload_date text,
-                            manifest text NOT NULL,
-                            experiment_id integer NOT NULL,
-                            roi_id integer NOT NULL);"""
-
-sql_insert_roi = """ INSERT INTO rois_prelabeling (transform_hash,
-                     ophys_segmentation_commit_hash,
-                     creation_date, upload_date, manifest, experiment_id,
-                     roi_id)
-                     VALUES (?, ?, ?, ?, ?, ?, ?) """
 
 
 def binary_mask_from_threshold(
