@@ -43,7 +43,7 @@ def bucket():
 def test_LabelDataUploader(mock_db_conn_fixture, bucket, timestamp):
     args = {
             's3_bucket_name': bucket,
-            'sql_filter': "",
+            'roi_manifests_ids': [0],
             'timestamp': timestamp,
             'prefix': 'abc/def',
             }

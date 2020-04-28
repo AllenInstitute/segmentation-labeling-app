@@ -6,11 +6,11 @@ import slapp.utils.query_utils as query_utils
 
 
 class UploadSchema(argschema.ArgSchema):
-    sql_filter = argschema.fields.Str(
-        required=False,
-        default="",
-        missing="",
-        description="SQL query filter, starting with 'WHERE'")
+    roi_manifests_ids = argschema.fields.List(
+        argschema.fields.Int,
+        required=True,
+        description=("specifies the values of roi_manifests.ids "
+                     "to include in the upload"))
     s3_bucket_name = argschema.fields.Str(
         required=True,
         description="destination bucket name")
@@ -34,8 +34,9 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
         # get the specified per-ROI manifests
+        idstr = repr(self.args['roi_manifests_ids'])[1:-1]
         query_string = ("SELECT manifest FROM roi_manifests "
-                        f"{self.args['sql_filter']}")
+                        f"WHERE id in ({idstr})")
         manifests = [r['manifest'] for r in db_conn.query(query_string)]
 
         # upload the per-ROI manifests
