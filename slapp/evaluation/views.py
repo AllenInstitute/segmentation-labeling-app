@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 from scipy.sparse import coo_matrix
 import numpy as np
 
-from segmentation_labeling_app.transforms.array_utils import (
+from slapp.transforms.array_utils import (
     center_pad_2d, crop_2d_array)
 
 

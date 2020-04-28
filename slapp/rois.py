@@ -6,8 +6,8 @@ import numpy as np
 import cv2
 import sqlite3
 
-import segmentation_labeling_app.utils.query_utils as query_utils
-from segmentation_labeling_app.transforms.array_utils import (
+import slapp.utils.query_utils as query_utils
+from slapp.transforms.array_utils import (
         center_pad_2d, crop_2d_array)
 
 

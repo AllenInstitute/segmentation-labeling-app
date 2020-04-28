@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 import numpy as np
 from scipy.sparse import coo_matrix
-import segmentation_labeling_app.rois.rois as roi_module
+import slapp.rois as roi_module
 
 
 @pytest.mark.parametrize("use_coo", [True, False])

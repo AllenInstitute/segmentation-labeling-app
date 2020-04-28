@@ -3,6 +3,7 @@ import logging
 from typing import Tuple, Type, Union
 import numpy as np
 from scipy.sparse import coo_matrix
+import h5py
 
 
 def content_boundary_2d(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:
@@ -190,3 +191,59 @@ def center_pad_2d(arr: np.ndarray, shape: Tuple[int, int],
 
     return np.pad(arr, ((top_pad, bottom_pad), (left_pad, right_pad)),
                   mode="constant", constant_values=(value,))
+
+
+def downsample_array(
+        array: Union[h5py.Dataset, np.ndarray],
+        input_fps: int = 31,
+        output_fps: int = 4,
+        strategy: str = 'average',
+        random_seed: int = 0) -> np.ndarray:
+    """Downsamples an array-like object along axis=0
+
+    Parameters
+    ----------
+        array: h5py.Dataset or numpy.ndarray
+            the input array
+        input_fps: int
+            frames-per-second of the input array
+        output_fps: int
+            frames-per-second of the output array
+        strategy: str
+            downsampling strategy. 'random', 'maximum', 'average',
+            'first', 'last'. Note 'maximum' is not defined for
+            multi-dimensional arrays
+        random_seed: int
+            passed to numpy.random.default_rng if strategy is 'random'
+
+    Returns:
+        array_out: numpy.ndarray
+            array downsampled along axis=0
+    """
+    if output_fps > input_fps:
+        raise ValueError('Output FPS cannot be greater than input FPS')
+    if (strategy == 'maximum') & (len(array.shape) > 1):
+        raise ValueError("downsampling with strategy 'maximum' is not defined")
+
+    npts_in = array.shape[0]
+    npts_out = int(npts_in * output_fps / input_fps)
+    bin_list = np.array_split(np.arange(npts_in), npts_out)
+
+    array_out = np.zeros((npts_out, *array.shape[1:]))
+
+    if strategy == 'random':
+        rng = np.random.default_rng(random_seed)
+
+    sampling_strategies = {
+            'random': lambda arr, idx: arr[rng.choice(idx)],
+            'maximum': lambda arr, idx: arr[idx].max(axis=0),
+            'average': lambda arr, idx: arr[idx].mean(axis=0),
+            'first': lambda arr, idx: arr[idx[0]],
+            'last': lambda arr, idx: arr[idx[-1]]
+            }
+
+    sampler = sampling_strategies[strategy]
+    for i, bin_indices in enumerate(bin_list):
+        array_out[i] = sampler(array, bin_indices)
+
+    return array_out
