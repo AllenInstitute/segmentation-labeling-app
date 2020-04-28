@@ -7,7 +7,7 @@ import slapp.transfers.upload as up
 
 
 @pytest.fixture
-def mock_db_conn_fixture(request, tmpdir_factory):
+def mock_db_conn_fixture(tmpdir_factory):
     tdir = tmpdir_factory.mktemp("contents")
     keys = [
             'source-ref', 'roi-mask-source-ref', 'video-source-ref',
