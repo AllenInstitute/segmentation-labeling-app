@@ -1,6 +1,4 @@
 import os
-from collections import namedtuple
-
 import pg8000
 
 
@@ -59,6 +57,25 @@ class DbConnection():
         cursor.execute(query)
         columns = [d[0].decode("utf-8") for d in cursor.description]
         return [dict(zip(columns, c)) for c in cursor.fetchall()]
+
+    def bulk_insert(self, statements):
+        """insert multiple statements with a single commit
+
+        Parameters
+        ----------
+        statements: list
+            each element of statements should be a valid INSERT statement
+        """
+        conn, cursor = DbConnection._connect(self.user, self.host,
+                                             self.database,
+                                             self.password, self.port)
+        try:
+            for statement in statements:
+                cursor.execute(statement)
+        finally:
+            conn.commit()
+            cursor.close()
+            conn.close()
 
     def query(self, query):
         conn, cursor = DbConnection._connect(self.user, self.host,

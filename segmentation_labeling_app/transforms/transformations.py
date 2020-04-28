@@ -79,7 +79,6 @@ def downsample_array(
 
     npts_in = array.shape[0]
     npts_out = int(npts_in * output_fps / input_fps)
-    print(npts_in, npts_out)
     bin_list = np.array_split(np.arange(npts_in), npts_out)
 
     array_out = np.zeros((npts_out, *array.shape[1:]))

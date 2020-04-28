@@ -75,7 +75,6 @@ class TransformPipelineSchema(argschema.ArgSchema):
                         "if omitting arg segmentation_run_id, must "
                         "include args ophys_experiment_id and "
                         "ophys_segmentation_commit_hash")
-            data["segmentation_run_id"] = 12345
 
             db_credentials = query_utils.get_labeling_db_credentials()
             db_connection = query_utils.DbConnection(**db_credentials)
@@ -90,13 +89,6 @@ class TransformPipelineSchema(argschema.ArgSchema):
                     f"{query_string} did not return exactly 1 result")
             data['segmentation_run_id'] = entries[0]['id']
         return data
-
-
-def save_manifest(manifest: dict, output_dir: Path):
-    manifest_path = output_dir / f"manifest_{manifest['roi-id']}.json"
-
-    with manifest_path.open('w') as f:
-        json.dump(manifest, f)
 
 
 class TransformPipeline(argschema.ArgSchemaParser):
@@ -130,6 +122,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         avg_projection = np.mean(downsampled_video, axis=0)
 
         # create the per-ROI artifacts
+        insert_statements = []
         for roi in rois:
             # mask and outline from ROI class
             mask_path = output_dir / f"mask_{roi.roi_id}.png"
@@ -168,7 +161,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
             # trace
             trace = downsample_array(
-                    roi['trace'],
+                    np.array(roi.trace),
                     self.args['input_fps'],
                     self.args['output_fps'],
                     self.args['downsampling_strategy'],
@@ -192,7 +185,15 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['avg-source-ref'] = str(avg_proj_path)
             manifest['trace-source-ref'] = str(trace_path)
 
-            save_manifest(manifest, output_dir)
+            insert_str = (
+                    "INSERT INTO roi_manifests "
+                    "(manifest, transform_hash, roi_id) "
+                    f"VALUES ('{json.dumps(manifest)}', "
+                    f"'{os.environ['TRANSFORM_HASH']}', {roi.roi_id})")
+
+            insert_statements.append(insert_str)
+
+        db_conn.bulk_insert(insert_statements)
 
 
 if __name__ == "__main__":  # pragma: no cover

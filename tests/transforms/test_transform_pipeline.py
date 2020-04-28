@@ -15,8 +15,12 @@ def mock_db_conn_fixture(request):
     def mock_query(query_string):
         return query_return_values[query_string]
 
+    def mock_insert(statement):
+        return
+
     mock_db_conn = MagicMock()
     mock_db_conn.query.side_effect = mock_query
+    mock_db_conn.insert.side_effect = mock_insert
     return mock_db_conn
 
 
@@ -91,7 +95,6 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     mock_content_extents = MagicMock(return_value=([0, 0, 2, 2], [1, 1, 1, 1]))
     mock_transform_to_mp4 = MagicMock()
     mock_np = MagicMock()
-    mock_save_manifest = MagicMock()
 
     mpatcher = partial(monkeypatch.setattr, target=transform_pipeline)
     mpatcher(name="ROI", value=mock_roi)
@@ -100,7 +103,6 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     mpatcher(name="content_extents", value=mock_content_extents)
     mpatcher(name="transform_to_mp4", value=mock_transform_to_mp4)
     mpatcher(name="np", value=mock_np)
-    mpatcher(name="save_manifest", value=mock_save_manifest)
 
     pipeline = transform_pipeline.TransformPipeline(input_data=input_data,
                                                     args=[])
@@ -130,4 +132,3 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     outdir_name = f"segmentation_run_id_{input_data['segmentation_run_id']}"
     expected_outdir = Path(input_data["artifact_basedir"]) / outdir_name
     expected_calls = [call(m, expected_outdir) for m in expected_manifests]
-    mock_save_manifest.assert_has_calls(expected_calls, any_order=False)
