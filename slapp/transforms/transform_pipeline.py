@@ -8,9 +8,9 @@ import numpy as np
 import slapp.utils.query_utils as query_utils
 from slapp.rois import ROI
 from slapp.transforms.video_utils import (
-        downsample_array, downsample_h5_video, transform_to_mp4)
+    downsample_h5_video, transform_to_mp4)
 from slapp.transforms.array_utils import (
-        content_extents)
+        content_extents, downsample_array)
 
 
 class TransformPipelineException(Exception):
