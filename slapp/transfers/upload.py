@@ -9,6 +9,7 @@ class UploadSchema(argschema.ArgSchema):
     roi_manifests_ids = argschema.fields.List(
         argschema.fields.Int,
         required=True,
+        cli_as_single_argument=True,
         description=("specifies the values of roi_manifests.ids "
                      "to include in the upload"))
     s3_bucket_name = argschema.fields.Str(
