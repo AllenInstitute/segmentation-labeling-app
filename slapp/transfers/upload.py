@@ -16,8 +16,8 @@ class UploadSchema(argschema.ArgSchema):
         description="destination bucket name")
     prefix = argschema.fields.Str(
         required=False,
-        default="",
-        missing="",
+        default=None,
+        allow_none=True,
         description="key prefix for manifest and contents")
     timestamp = argschema.fields.Bool(
         required=False,
@@ -42,7 +42,10 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         # upload the per-ROI manifests
         prefix = self.args['prefix']
         if self.args['timestamp']:
-            prefix += '/' + self.timestamp
+            if prefix is None:
+                prefix = self.timestamp
+            else:
+                prefix += '/' + self.timestamp
         s3_manifests = []
         for manifest in manifests:
             s3_manifests.append(
