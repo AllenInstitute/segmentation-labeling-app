@@ -116,15 +116,18 @@ class ROI:
                  coo_data: Union[np.array, List[float]],
                  image_shape: Tuple[int, int],
                  experiment_id: int,
-                 roi_id: int):
+                 roi_id: int,
+                 trace: Union[np.array, List[float]]):
         self.image_shape = image_shape
         self.experiment_id = experiment_id
         self.roi_id = roi_id
         self._sparse_coo = coo_matrix((coo_data, (coo_rows, coo_cols)),
                                       shape=image_shape)
+        self.trace = trace
 
     @classmethod
-    def roi_from_query(cls, roi_id: int) -> "ROI":
+    def roi_from_query(cls, roi_id: int,
+                       db_conn: query_utils.DbConnection) -> "ROI":
         """
         Queries and builds ROI object by querying LIMS table for
         produced labeling ROIs.
@@ -133,31 +136,21 @@ class ROI:
 
         Returns: ROI object for the given segmentation_id and roi_id
         """
-        label_vars = query_utils.get_labeling_env_vars()
 
-        roi = query_utils.query(
-            f"SELECT * FROM rois WHERE id={roi_id}",
-            user=label_vars.user,
-            host=label_vars.host,
-            database=label_vars.database,
-            port=label_vars.port,
-            password=label_vars.password)[0]
+        roi = db_conn.query(f"SELECT * FROM rois WHERE id={roi_id}")[0]
 
-        segmentation_run = query_utils.query(
+        segmentation_run = db_conn.query(
             ("SELECT * FROM segmentation_runs WHERE "
-             f"id={roi['segmentation_run_id']}"),
-            user=label_vars.user,
-            host=label_vars.host,
-            database=label_vars.database,
-            port=label_vars.port,
-            password=label_vars.password)[0]
+             f"id={roi['segmentation_run_id']}"))[0]
 
         return ROI(coo_rows=roi['coo_row'],
                    coo_cols=roi['coo_col'],
                    coo_data=roi['coo_data'],
                    image_shape=segmentation_run['video_shape'],
                    experiment_id=segmentation_run['ophys_experiment_id'],
-                   roi_id=roi_id)
+                   roi_id=roi_id,
+                   trace=roi['trace']
+                   )
 
     def generate_ROI_mask(
             self, shape: Tuple[int, int] = None, full: bool = False):
@@ -235,56 +228,3 @@ class ROI:
         mask = sized_mask(mask, shape=shape, full=full)
 
         return mask
-
-    def create_manifest_json(self, source_ref: str,
-                             video_source_ref: str, max_source_ref: str,
-                             avg_source_ref: str, trace_source_ref: str,
-                             roi_data_source_ref: str) -> str:
-        """
-        Function to make the manifest json string required for sagemaker
-        ground truth to read the data in successfully. The strings are
-        local URIs for each of the required data.
-        Args:
-            source_ref: Location of ROI mask png
-            video_source_ref: Location of 2P video for the ROI
-            max_source_ref: Location of the maximum projection for the ROI
-            avg_source_ref: Location of the average projection for the ROI
-            trace_source_ref: Location of the trace data for the ROI
-            roi_data_source_ref: Location of the ROI coordinate data
-
-        Returns:
-            dictionary: returns dictionary as json string
-        """
-        dictionary = {'source_ref': source_ref,
-                      'video_source_ref': video_source_ref,
-                      'max_source_ref': max_source_ref,
-                      'avg_source_ref': avg_source_ref,
-                      'trace_source_ref': trace_source_ref,
-                      'roi_data_source-ref': roi_data_source_ref,
-                      'roi_id': self.roi_id,
-                      'experiment_id': self.experiment_id}
-        return json.dumps(dictionary)
-
-    def write_roi_to_db(self, database_file_path: Path,
-                        transform_hash: str,
-                        ophys_segmentation_commit_hash: str,
-                        creation_date: str,
-                        manifest: str,
-                        upload_date: str = None):
-        # connect to the database file
-        db_connection = sqlite3.connect(database_file_path.as_posix())
-
-        # create table, sql query handles the checking if already exists
-        curr = db_connection.cursor()
-        curr.execute(sql_create_rois_table)
-
-        roi_task = (transform_hash, ophys_segmentation_commit_hash,
-                    creation_date, upload_date, manifest,
-                    self.experiment_id, self.roi_id)
-        # add the roi to the table
-        curr.execute(sql_insert_roi, roi_task)
-        unique_id = curr.lastrowid
-        db_connection.commit()
-        db_connection.close()
-
-        return unique_id

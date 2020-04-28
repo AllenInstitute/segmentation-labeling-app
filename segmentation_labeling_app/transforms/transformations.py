@@ -1,195 +1,104 @@
 from pathlib import Path
-import random
-from typing import Union, Tuple
-import math
-
+from typing import Union
 import h5py
 import numpy as np
 import imageio_ffmpeg as mpg
 
 
-def downsample_h5_video(video_path: Union[Path], input_fps: int,
-                        output_fps: int, strategy: str = 'random',
-                        random_seed: int = 0) -> np.ndarray:
-    """
-    Function to down-sample an array stored in h5 format to a desired FPS.
-    Follows the strategy specified in the function call, current strategies are
-    (random, maximum, average). Random takes a random sample of one frame from
-    window, maximum takes the maximum frame in window, average takes the mean
-    of window.
-    Args:
-        video_path: The path to the input video in Path format
-        input_fps: The FPS or Hz of the input video
-        output_fps: The desired output FPS or Hz
-        strategy: The down-sampling strategy to follow
-        random_seed: The seed for generating random variables if random strategy
-        is followed
+def downsample_h5_video(
+        video_path: Union[Path],
+        input_fps: int = 31,
+        output_fps: int = 4,
+        strategy: str = 'average',
+        random_seed: int = 0) -> np.ndarray:
+    """Opens an h5 file and downsamples dataset 'data'
+    along axis=0
+
+    Parameters
+    ----------
+        video_path: pathlib.Path
+            path to an h5 video. Should have dataset 'data'. For video,
+            assumes dimensions [time, width, height] and downsampling
+            applies to time.
+        input_fps: int
+            frames-per-second of the input array
+        output_fps: int
+            frames-per-second of the output array
+        strategy: str
+            downsampling strategy. 'random', 'maximum', 'average',
+            'first', 'last'. Note 'maximum' is not defined for
+            multi-dimensional arrays
+        random_seed: int
+            passed to numpy.random.default_rng if strategy is 'random'
 
     Returns:
-        new_video: A new video down-sampled to desired FPS with selected
-        strategy (time, row, col)
+        video_out: numpy.ndarray
+            array downsampled along axis=0
     """
-    if not video_path.exists():
-        raise FileNotFoundError('Path specified doesnt exist or is not accessible')
-    if not video_path.suffix == '.h5':
-        raise AttributeError('Video path provided not an h5 file, please'
-                             'provide an h5 file')
-
-    with h5py.File(video_path, 'r') as open_video:
-        video = open_video['data']
-        return _downsample_array(full_array=video,
-                                 input_fps=input_fps,
-                                 output_fps=output_fps,
-                                 strategy=strategy,
-                                 random_seed=random_seed)
+    with h5py.File(video_path, 'r') as h5f:
+        video_out = downsample_array(
+                h5f['data'],
+                input_fps,
+                output_fps,
+                strategy,
+                random_seed)
+    return video_out
 
 
-def _downsample_array(full_array: h5py.Dataset, input_fps: int,
-                      output_fps: int, strategy: str = 'random',
-                      random_seed: int = 0) -> np.ndarray:
-    """
-    Function to down-sample a numpy array to a desired FPS. Follows the
-    strategy specified in the function call, current strategies are (random,
-    maximum, average, first, and last). Random takes a random sample of one
-    frame from window, maximum takes the maximum frame in window, average takes
-    the mean of window, first takes the first frame, last takes the last frame.
-    Args:
-        full_array: The video array in h5 dataset format (time, row, col)
-        input_fps: The FPS or Hz of the input video
-        output_fps: The desired output FPS or Hz
-        strategy: The down-sampling strategy to follow
-        random_seed: If random strategy is followed, seed controls the random
-        variable generation
+def downsample_array(
+        array: Union[h5py.Dataset, np.ndarray],
+        input_fps: int = 31,
+        output_fps: int = 4,
+        strategy: str = 'average',
+        random_seed: int = 0) -> np.ndarray:
+    """Downsamples an array-like object along axis=0
+
+    Parameters
+    ----------
+        array: h5py.Dataset or numpy.ndarray
+            the input array
+        input_fps: int
+            frames-per-second of the input array
+        output_fps: int
+            frames-per-second of the output array
+        strategy: str
+            downsampling strategy. 'random', 'maximum', 'average',
+            'first', 'last'. Note 'maximum' is not defined for
+            multi-dimensional arrays
+        random_seed: int
+            passed to numpy.random.default_rng if strategy is 'random'
 
     Returns:
-        new_video: A new video down-sampled to desired FPS with selected
-        strategy (time, row, col)
+        array_out: numpy.ndarray
+            array downsampled along axis=0
     """
     if output_fps > input_fps:
         raise ValueError('Output FPS cannot be greater than input FPS')
-    downsampled_ratio = input_fps / output_fps
-    downsampled_bin_cnt = len(full_array) / downsampled_ratio
+    if (strategy == 'maximum') & (len(array.shape) > 1):
+        raise ValueError("downsampling with strategy 'maximum' is not defined")
 
-    downsampled_bins = np.array_split(full_array, downsampled_bin_cnt)
-    new_frames = np.zeros(shape=(len(downsampled_bins), full_array.shape[1],
-                                 full_array.shape[2]))
+    npts_in = array.shape[0]
+    npts_out = int(npts_in * output_fps / input_fps)
+    bin_list = np.array_split(np.arange(npts_in), npts_out)
+
+    array_out = np.zeros((npts_out, *array.shape[1:]))
+
     if strategy == 'random':
-        random.seed(random_seed)
+        rng = np.random.default_rng(random_seed)
 
-    for i, downsampled_bin in enumerate(downsampled_bins):
-        if strategy == 'random':
-            rand_idx = random.randint(0, len(downsampled_bin) - 1)
-            new_frames[i] = downsampled_bin[rand_idx]
-        elif strategy == 'maximum':
-            new_frames[i] = np.max(downsampled_bin, axis=0)
-        elif strategy == 'average':
-            new_frames[i] = np.mean(downsampled_bin, axis=0)
-        elif strategy == 'first':
-            new_frames[i] = downsampled_bin[0]
-        elif strategy == 'last':
-            new_frames[i] = downsampled_bin[len(downsampled_bin) - 1]
-    return new_frames
+    sampling_strategies = {
+            'random': lambda arr, idx: arr[rng.choice(idx)],
+            'maximum': lambda arr, idx: arr[idx].max(axis=0),
+            'average': lambda arr, idx: arr[idx].mean(axis=0),
+            'first': lambda arr, idx: arr[idx[0]],
+            'last': lambda arr, idx: arr[idx[-1]]
+            }
 
+    sampler = sampling_strategies[strategy]
+    for i, bin_indices in enumerate(bin_list):
+        array_out[i] = sampler(array, bin_indices)
 
-def get_transformed_center(coordinate_pair: Tuple[int, int],
-                           box_size: Tuple[int, int],
-                           video_shape: Tuple[int, int]) -> Tuple[int, int]:
-    """
-    Returns a coordinate pair that has been transformed to fit as closely to
-    original position as possible but still with box contained totally in video.
-    This is made to shift the coordinate if the subset box goes out of bound of
-    the video shape. The shift moves the box fully into the frame while maintaining
-    the center of the visual box is as close as possible to the original center.
-    (example coordinate pair at 0, with box size 3 x 3)
-    x x x x    x x x x
-    x x x x    x x x x
-    x x x x -> x x x x
-    x x x x    x 0 x x
-    x 0 x x    x x x x
-    Args:
-        coordinate_pair: the original coordinate location for centering (row, col)
-        box_size: the size of the box for subset (row, col)
-        video_shape: the x and y dimensions of the video (time, row, col)
-
-    Returns:
-        transformed_center: returns the best fitting center of the box for out
-        of bounds coordinates (row, col)
-
-    """
-    if box_size[0] > video_shape[0] or box_size[1] > video_shape[1]:
-        raise ValueError('Box is larger or equal in size in one or more'
-                         'dimensions to original video shape. Provide a '
-                         'box size smaller than original video.')
-    else:
-        # if the box size is less than frame size it can only be out of bounds in
-        # direction left and right and one direction up and down
-        transformed_col = coordinate_pair[1]
-        transformed_row = coordinate_pair[0]
-        # can't be centered left
-        if coordinate_pair[0] < (math.ceil(box_size[0]/2) - 1):
-            transformed_row = math.ceil(box_size[0] / 2) - 1
-
-        # can't be centered up
-        if coordinate_pair[1] < (math.ceil(box_size[1]/2) - 1):
-            transformed_col = math.ceil(box_size[1] / 2) - 1
-
-        # can't be centered right
-        if (coordinate_pair[0] + (math.ceil(box_size[0]/2))) > video_shape[0] - 1:
-            transformed_row = video_shape[0] - math.floor(box_size[0] / 2) - 1
-
-        # can't be centered down
-        if (coordinate_pair[1] + (math.ceil(box_size[1]/2))) > video_shape[1] - 1:
-            transformed_col = video_shape[1] - math.floor(box_size[1] / 2) - 1
-
-    return transformed_row, transformed_col
-
-
-def get_centered_coordinate_box_video(coordinate_pair: Tuple[int, int],
-                                      box_size: Tuple[int, int],
-                                      video_array: np.ndarray):
-    """
-    Function to get video subset centered around coordinate pair with
-    size specified by box size tuple. Function takes a subset of each frame
-    and stacks together to get final video.
-    Args:
-        coordinate_pair: the coordinate on which to center the subset (row, col)
-        box_size: the size of the subset box (row, col)
-        video_array: the video to take the subset from array should be of
-                     form (time, row, col)
-
-    Returns:
-
-    """
-    if not len(video_array[0].shape) == 2:
-        raise ValueError('Video does not have correct shape')
-    transformed_coordinates = get_transformed_center(coordinate_pair, box_size,
-                                                     video_array[0].shape)
-    left_column = transformed_coordinates[1] - math.floor(box_size[1] / 2)
-    right_column = transformed_coordinates[1] + math.ceil(box_size[1] / 2)
-    up_row = transformed_coordinates[0] - math.floor(box_size[0] / 2)
-    down_row = transformed_coordinates[0] + math.ceil(box_size[0] / 2)
-    transformed_video = np.zeros(shape=(video_array.shape[0], box_size[0], box_size[1]))
-    for i, frame in enumerate(video_array):
-        transformed_video[i] = frame[up_row:down_row, left_column:right_column]
-    return np.uint8(transformed_video)
-
-
-def generate_max_ave_proj_image(video: np.ndarray,
-                                projection_type: str = 'average'):
-    """
-    Returns a maximum projection or an average projection of a video in
-    numpy array format
-    Args:
-        video: The video to generate the projection with shape (time, row, col)
-        projection_type: maximum or average, what type of projection
-
-    Returns: A numpy array generated with the specified strategy (time, row, col)
-
-    """
-    if projection_type == 'average':
-        return np.mean(video)
-    elif projection_type == 'maximum':
-        return np.max(video, axis=0)
+    return array_out
 
 
 def normalize_video(video: np.ndarray):
@@ -226,4 +135,3 @@ def transform_to_mp4(video: np.ndarray, output_path: str,
     for frame in norm_video:
         writer.send(frame)
     writer.close()
-

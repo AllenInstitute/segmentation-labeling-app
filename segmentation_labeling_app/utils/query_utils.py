@@ -1,6 +1,4 @@
 import os
-from collections import namedtuple
-
 import pg8000
 
 
@@ -8,10 +6,19 @@ class LabelingEnvException(Exception):
     pass
 
 
-def get_labeling_env_vars():
-    """ returns a namedtuple with fields necessary for connection to
-    a postgres table. Fields are populated from environment variables
-    and non-credential fields have defaults.
+def get_labeling_db_credentials() -> dict:
+    """Get labeling DB credentials from environment variables.
+
+    Returns
+    -------
+    dict
+        A dictionary of DB credentials. Contains the following fields:
+        'user', 'host', 'database', 'password', 'port'.
+
+    Raises
+    ------
+    LabelingEnvException
+        Raised if LABELING_USER/LABELING_PASSWORD are not set.
     """
     try:
         user = os.environ["LABELING_USER"]
@@ -24,34 +31,63 @@ def get_labeling_env_vars():
     database = os.environ.get(
             'LABELING_DATABASE', "ophys_segmentation_labeling")
     port = os.environ.get('LABELING_PORT', 5432)
-    LabelVars = namedtuple(
-            'LabelVars',
-            ['user', 'password', 'host', 'database', 'port'])
-    label_vars = LabelVars(user, password, host, database, port)
-    return label_vars
+    db_credentials = {'user': user, 'host': host, 'database': database,
+                      'password': password, 'port': port}
+
+    return db_credentials
 
 
-def _connect(user, host, database, password, port):
-    conn = pg8000.connect(user=user, host=host, database=database,
-                          password=password, port=port)
-    return conn, conn.cursor()
+class DbConnection():
 
+    def __init__(self, user, host, database, password, port):
+        self.user = user
+        self.host = host
+        self.database = database
+        self.password = password
+        self.port = port
 
-def _select(cursor, query):
-    cursor.execute(query)
-    columns = [d[0].decode("utf-8") for d in cursor.description]
-    return [dict(zip(columns, c)) for c in cursor.fetchall()]
+    @staticmethod
+    def _connect(user, host, database, password, port):
+        conn = pg8000.connect(user=user, host=host, database=database,
+                              password=password, port=port)
+        return conn, conn.cursor()
 
+    @staticmethod
+    def _select(cursor, query):
+        cursor.execute(query)
+        columns = [d[0].decode("utf-8") for d in cursor.description]
+        return [dict(zip(columns, c)) for c in cursor.fetchall()]
 
-def query(query, user, host, database, password, port):
-    conn, cursor = _connect(user, host, database, password, port)
+    def bulk_insert(self, statements):
+        """insert multiple statements with a single commit
 
-    # Guard against non-ascii characters in query
-    query = ''.join([i if ord(i) < 128 else ' ' for i in query])
+        Parameters
+        ----------
+        statements: list
+            each element of statements should be a valid INSERT statement
+        """
+        conn, cursor = DbConnection._connect(self.user, self.host,
+                                             self.database,
+                                             self.password, self.port)
+        try:
+            for statement in statements:
+                cursor.execute(statement)
+        finally:
+            conn.commit()
+            cursor.close()
+            conn.close()
 
-    try:
-        results = _select(cursor, query)
-    finally:
-        cursor.close()
-        conn.close()
-    return results
+    def query(self, query):
+        conn, cursor = DbConnection._connect(self.user, self.host,
+                                             self.database,
+                                             self.password, self.port)
+
+        # Guard against non-ascii characters in query
+        query = ''.join([i if ord(i) < 128 else ' ' for i in query])
+
+        try:
+            results = DbConnection._select(cursor, query)
+        finally:
+            cursor.close()
+            conn.close()
+        return results

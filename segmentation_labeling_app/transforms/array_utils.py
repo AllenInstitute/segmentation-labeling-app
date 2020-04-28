@@ -44,6 +44,79 @@ def content_boundary_2d(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:
     return top_bound, bot_bound, left_bound, right_bound
 
 
+def content_extents(
+        arr: Union[np.ndarray, coo_matrix],
+        shape: Tuple[int, int],
+        target_shape: Tuple[int, int] = None):
+    """return the bounding box of size shape. Intended to be applied to
+    a target data source, for example a set of video frames.
+
+    Parameters
+    ----------
+    arr: A 2d np.ndarray or coo_matrix. Other formats are also possible
+        (csc_matrix, etc.) as long as they have the toarray() method to
+         convert them to np.ndarray.
+    shape: (Tuple[int,int]) Desired final shape after padding is applied.
+        If smaller than the input array, will return the input array
+        without any changes.
+    target_shape: (Tuple[int, int]) Extent of array to be indexed. If None
+        padding will still handle top and left, but bottom and right padding
+        will always be zero
+
+    Returns
+    -------
+    indexing_bounds: tuple
+        4-tuple of row/column boundaries
+    pad_width: tuple(tuple, tuple)
+        to be passed into numpy.pad as pad_width
+
+    """
+    boundaries = content_boundary_2d(arr)
+    height = boundaries[1] - boundaries[0]
+    width = boundaries[3] - boundaries[2]
+
+    vertical_pad = shape[0] - height
+    horizontal_pad = shape[1] - width
+
+    if vertical_pad % 2 == 0:
+        top_pad = bottom_pad = int(vertical_pad / 2)
+    else:
+        top_pad = math.floor(vertical_pad / 2)
+        bottom_pad = top_pad + 1
+    if horizontal_pad % 2 == 0:
+        left_pad = right_pad = int(horizontal_pad / 2)
+    else:
+        left_pad = math.floor(horizontal_pad / 2)
+        right_pad = left_pad + 1
+
+    top = boundaries[0] - top_pad
+    bot = boundaries[1] + bottom_pad
+    left = boundaries[2] - left_pad
+    right = boundaries[3] + right_pad
+
+    pad_width = [[0, 0], [0, 0]]
+    if top < 0:
+        pad_width[0][0] = abs(top)
+        top = 0
+    if left < 0:
+        pad_width[1][0] = abs(left)
+        left = 0
+    if target_shape is not None:
+        dh = target_shape[0] - bot
+        if dh < 0:
+            pad_width[0][1] = abs(dh)
+            bot = target_shape[0]
+        dw = target_shape[1] - right
+        if dw < 0:
+            pad_width[1][1] = abs(dw)
+            right = target_shape[1]
+
+    indexing_bounds = (top, bot, left, right)
+    pad_width = tuple([tuple(i) for i in pad_width])
+
+    return indexing_bounds, pad_width
+
+
 def crop_2d_array(arr: Union[np.ndarray, coo_matrix]) -> np.ndarray:
     """
     Crop a 2d array to a rectangle surrounding all nonzero elements.
