@@ -144,7 +144,7 @@ class ROI:
             ("SELECT * FROM segmentation_runs WHERE "
              f"id={roi['segmentation_run_id']}"))[0]
 
-        # NOTE: temporary legacy support for no traces
+        # TODO: temporary legacy support for no traces
         # will remove and delete legacy traceless ROI
         # entries when all agreed.
         trace = None

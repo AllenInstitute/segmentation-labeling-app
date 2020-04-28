@@ -105,7 +105,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         entries = db_conn.query(query_string)
         roi_ids = [i['id'] for i in entries]
 
-        # NOTE: here could be a good place to put a pre-filtering stepw
+        # TODO: here could be a good place to put a pre-filtering stepw
         rois = [ROI.roi_from_query(roi_id, db_conn) for roi_id in roi_ids]
 
         # load, downsample and project the source video
