@@ -5,11 +5,11 @@ import os
 import json
 import imageio
 import numpy as np
-import segmentation_labeling_app.utils.query_utils as query_utils
-from segmentation_labeling_app.rois.rois import ROI
-from segmentation_labeling_app.transforms.transformations import (
+import slapp.utils.query_utils as query_utils
+from slapp.rois import ROI
+from slapp.transforms.video_utils import (
         downsample_array, downsample_h5_video, transform_to_mp4)
-from segmentation_labeling_app.transforms.array_utils import (
+from slapp.transforms.array_utils import (
         content_extents)
 
 

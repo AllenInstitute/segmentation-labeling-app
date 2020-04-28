@@ -5,7 +5,7 @@ from functools import partial
 import os
 import numpy as np
 
-from segmentation_labeling_app.transforms import transform_pipeline
+from slapp.transforms import transform_pipeline
 
 
 @pytest.fixture
