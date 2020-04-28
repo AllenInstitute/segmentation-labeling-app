@@ -1,42 +1,33 @@
-import sqlite3
 import pytest
-import json
+from unittest.mock import MagicMock
 import boto3
 from moto import mock_s3
 import os
 import slapp.transfers.upload as up
 
 
-@pytest.fixture(scope='module')
-def db_file(tmpdir_factory):
-    db = tmpdir_factory.mktemp("upload").join("mydatabase.db")
-    conn = sqlite3.connect(db)
-    conn.execute("CREATE TABLE manifest_table (manifest text)")
-    conn.close
-    yield db
+@pytest.fixture
+def mock_db_conn_fixture(request, tmpdir_factory):
+    tdir = tmpdir_factory.mktemp("contents")
+    keys = [
+            'source-ref', 'roi-mask-source-ref', 'video-source-ref',
+            'max-source-ref', 'avg-source-ref', 'trace-source-ref']
+    return_val = {
+            'experiment-id': 1234,
+            'roi-id': 98765
+            }
+    for ik, key in enumerate(keys):
+        tpath = tdir.join(f"{ik}.txt")
+        with open(tpath, "w") as fp:
+            fp.write('content')
+        return_val[key] = str(tpath)
 
+    def mock_query(query_string):
+        return [{'manifest': return_val}]
 
-@pytest.fixture(scope='module')
-def populated_db(db_file, tmpdir_factory):
-    tdir = tmpdir_factory.mktemp("local_files")
-    test_dicts = []
-    for j in range(4):
-        test_dict = {}
-        for i in range(4):
-            fn = tdir.join(f"test_{i}_{j}.txt")
-            with open(fn, "w") as fp:
-                fp.write("contents")
-            test_dict[f"key{i}"] = str(fn)
-        test_dicts.append(test_dict)
-
-    conn = sqlite3.connect(db_file)
-    tstrs = [json.dumps(test_dict) for test_dict in test_dicts]
-    for tstr in tstrs:
-        conn.execute(
-                "INSERT INTO manifest_table (manifest) VALUES ('%s')" % tstr)
-    conn.commit()
-    conn.close()
-    yield db_file
+    mock_db_conn = MagicMock()
+    mock_db_conn.query.side_effect = mock_query
+    return mock_db_conn
 
 
 @pytest.fixture(scope='function')
@@ -49,27 +40,15 @@ def bucket():
 
 
 @pytest.mark.parametrize("timestamp", [True, False])
-def test_LabelDataUploader(populated_db, bucket, timestamp):
+def test_LabelDataUploader(mock_db_conn_fixture, bucket, timestamp):
     args = {
-            'sqlite_db_file': str(populated_db),
             's3_bucket_name': bucket,
-            'sql_table': 'manifest_table',
             'sql_filter': "",
             'timestamp': timestamp,
             'prefix': 'abc/def',
             }
     ldu = up.LabelDataUploader(input_data=args, args=[])
-    ldu.run()
-
-    # get the contents of the db_file
-    conn = sqlite3.connect(populated_db)
-    response = conn.execute(f"SELECT manifest FROM {args['sql_table']}")
-    files_in_db = []
-    for r in response.fetchall():
-        d = json.loads(r[0])
-        for key in d:
-            files_in_db.append(os.path.basename(d[key]))
-    conn.close()
+    ldu.run(mock_db_conn_fixture)
 
     # get what is in the bucket (function scoped)
     response = boto3.client('s3').list_objects_v2(Bucket=bucket)
@@ -77,6 +56,12 @@ def test_LabelDataUploader(populated_db, bucket, timestamp):
 
     # make sure we read whole contents
     assert not response['IsTruncated']
+
+    in_local_postgres = mock_db_conn_fixture.query("something")[0]['manifest']
+    files_in_db = []
+    for k, v in in_local_postgres.items():
+        if not isinstance(v, int):
+            files_in_db.append(os.path.basename(v))
 
     # s3 should have all the files, + 1 manifest
     assert len(files_in_s3) == (len(files_in_db) + 1)

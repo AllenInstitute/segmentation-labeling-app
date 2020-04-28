@@ -1,8 +1,6 @@
 import boto3
 from botocore.exceptions import ClientError
 import pathlib
-import sqlite3
-import json
 import jsonlines
 import tempfile
 import filecmp
@@ -123,35 +121,13 @@ def upload_manifest_contents(local_manifest, bucket, prefix):
     """
     s3_manifest = {}
     for k, v in local_manifest.items():
-        object_key = prefix + "/" + pathlib.PurePath(v).name
-        s3_manifest[k] = upload_file(v, bucket, object_key)
+        if k in ['experiment-id', 'roi-id']:
+            s3_manifest[k] = v
+        else:
+            object_key = prefix + "/" + pathlib.PurePath(v).name
+            s3_manifest[k] = upload_file(v, bucket, object_key)
 
     return s3_manifest
-
-
-def get_manifests_from_db(sqlite_db_file, sql_table, sql_filter=""):
-    """get back a list of manifests, as jsons
-
-    Parameters
-    ----------
-    sqlite_db_file: path-like object
-        passed to sqlite3.connect()
-    sql_table: str
-        table to query
-    sql_filter: str
-        "portion of a SQL query starting with WHERE for filtering"
-
-    Returns
-    -------
-    results: List
-        each element of the list is a manifest dictionary
-
-    """
-    conn = sqlite3.connect(sqlite_db_file)
-    query_string = f"SELECT manifest FROM {sql_table} {sql_filter}"
-    results = [json.loads(result[0]) for result in conn.execute(query_string)]
-    conn.close()
-    return results
 
 
 def manifest_file_from_jsons(filepath, manifest_jsons):
