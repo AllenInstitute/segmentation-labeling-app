@@ -36,7 +36,7 @@ def object_exists(bucket, key):
     try:
         client.head_object(Bucket=bucket, Key=key)
         exists = True
-    except ClientError as exc:
+    except ClientError:
         pass
     return exists
 
