@@ -86,25 +86,15 @@ def downsample_array(
     if strategy == 'random':
         rng = np.random.default_rng(random_seed)
 
-        def sampler(arr, idx):
-            return arr[rng.choice(idx)]
-    elif strategy == 'maximum':
+    sampling_strategies = {
+            'random': lambda arr, idx: arr[rng.choice(idx)],
+            'maximum': lambda arr, idx: arr[idx].max(axis=0),
+            'average': lambda arr, idx: arr[idx].mean(axis=0),
+            'first': lambda arr, idx: arr[idx[0]],
+            'last': lambda arr, idx: arr[idx[-1]]
+            }
 
-        def sampler(arr, idx):
-            return arr[idx].max(axis=0)
-    elif strategy == 'average':
-
-        def sampler(arr, idx):
-            return arr[idx].mean(axis=0)
-    elif strategy == 'first':
-
-        def sampler(arr, idx):
-            return arr[idx[0]]
-    elif strategy == 'last':
-
-        def sampler(arr, idx):
-            return arr[idx[-1]]
-
+    sampler = sampling_strategies[strategy]
     for i, bin_indices in enumerate(bin_list):
         array_out[i] = sampler(array, bin_indices)
 
