@@ -37,15 +37,22 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
         # get the specified per-ROI manifests
+        nrequested = len(self.args['roi_manifests_ids'])
+        self.logger.info(f"Requesting {nrequested} roi manifests from postgres")
+
         idstr = repr(self.args['roi_manifests_ids'])[1:-1]
-        query_string = ("SELECT manifest FROM roi_manifests "
+        query_string = ("SELECT id, manifest FROM roi_manifests "
                         f"WHERE id in ({idstr})")
-        manifests = [r['manifest'] for r in db_conn.query(query_string)]
+        results = db_conn.query(query_string)
+        manifests = [r['manifest'] for r in results]
         nman = len(manifests)
-        self.logger.info(
-                f"retrieved {nman} roi manifests from postgres. "
-                "requested list was length "
-                f"{len(self.args['roi_manifests_ids'])}")
+        if nman != nrequested:
+            manifest_ids = [r['id'] for r in results]
+            missing_ids = \
+                    set(self.args['roi_manifests_ids']) - set(manifest_ids)
+            self.logger.warning(
+                    f"Requested {nrequested}, received {nman}. "
+                    f"Missing ids: {missing_ids}")
 
         # upload the per-ROI manifests
         prefix = self.args['prefix']
