@@ -31,6 +31,8 @@ class LabelDataUploader(argschema.ArgSchemaParser):
     default_schema = UploadSchema
 
     def run(self, db_conn: query_utils.DbConnection):
+        self.logger.name = type(self).__name__
+
         # unique timestamp for this invocation
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
@@ -39,6 +41,11 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         query_string = ("SELECT manifest FROM roi_manifests "
                         f"WHERE id in ({idstr})")
         manifests = [r['manifest'] for r in db_conn.query(query_string)]
+        nman = len(manifests)
+        self.logger.info(
+                f"retrieved {nman} roi manifests from postgres. "
+                "requested list was length "
+                f"{len(self.args['roi_manifests_ids'])}")
 
         # upload the per-ROI manifests
         prefix = self.args['prefix']
@@ -47,21 +54,29 @@ class LabelDataUploader(argschema.ArgSchemaParser):
                 prefix = self.timestamp
             else:
                 prefix += '/' + self.timestamp
+
+        uri = utils.s3_uri(self.args['s3_bucket_name'], prefix)
+        self.logger.info(f"bucket destination is {uri}")
+
         s3_manifests = []
-        for manifest in manifests:
+        for nm, manifest in enumerate(manifests):
             s3_manifests.append(
                 utils.upload_manifest_contents(
                     manifest,
                     self.args['s3_bucket_name'],
                     prefix))
+            if ((nm + 1) % 100 == 0) | (nm == nman - 1):
+                self.logger.info(
+                        f"uploaded source data for {nm + 1} / {nman} ROIs")
 
         # upload the manifest
         tfile = tempfile.NamedTemporaryFile()
         utils.manifest_file_from_jsons(tfile.name, s3_manifests)
-        utils.upload_file(
+        s3_manifest = utils.upload_file(
                 tfile.name,
                 self.args['s3_bucket_name'],
                 key=prefix + "/manifest.jsonl")
+        self.logger.info(f"uploaded {s3_manifest}")
         tfile.close()
 
 
