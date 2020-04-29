@@ -38,7 +38,8 @@ class LabelDataUploader(argschema.ArgSchemaParser):
 
         # get the specified per-ROI manifests
         nrequested = len(self.args['roi_manifests_ids'])
-        self.logger.info(f"Requesting {nrequested} roi manifests from postgres")
+        self.logger.info(
+                f"Requesting {nrequested} roi manifests from postgres")
 
         idstr = repr(self.args['roi_manifests_ids'])[1:-1]
         query_string = ("SELECT id, manifest FROM roi_manifests "
@@ -49,7 +50,7 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         if nman != nrequested:
             manifest_ids = [r['id'] for r in results]
             missing_ids = \
-                    set(self.args['roi_manifests_ids']) - set(manifest_ids)
+                set(self.args['roi_manifests_ids']) - set(manifest_ids)
             self.logger.warning(
                     f"Requested {nrequested}, received {nman}. "
                     f"Missing ids: {missing_ids}")
