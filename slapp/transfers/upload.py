@@ -80,10 +80,13 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         # upload the manifest
         tfile = tempfile.NamedTemporaryFile()
         utils.manifest_file_from_jsons(tfile.name, s3_manifests)
+        # NOTE: the docs for SageMaker GroundTruth specify a JSON Lines format
+        # but, throws an error with the .jsonl extension
+        # setting here to .json extension to resolve the error.
         s3_manifest = utils.upload_file(
                 tfile.name,
                 self.args['s3_bucket_name'],
-                key=prefix + "/manifest.jsonl")
+                key=prefix + "/manifest.json")
         self.logger.info(f"uploaded {s3_manifest}")
         tfile.close()
 
