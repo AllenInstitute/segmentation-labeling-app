@@ -79,7 +79,6 @@
   }
 </style>
 
-
 <crowd-form>
   <crowd-classifier
     name="roiLabel"
@@ -129,7 +128,7 @@
           <div class="col-sm">
             <span class="image-label">ROI Mask</span>
             <div class="image-container border"> 
-                <img src="{{ task.input.roi-mask-source-ref }}"></span>
+                <img src="{{ task.input.source-ref | grant_read_access }}"></span>
             </div>
           </div>
         </div>
@@ -183,7 +182,8 @@
 </crowd-form>
 
 <script>
-  Highcharts.getJSON("{{ task.input.trace-source-ref | to_json }}", 
+  let jsonPath = decodeLiquidUri("{{ task.input.trace-source-ref | grant_read_access }}");
+  Highcharts.getJSON(jsonPath, 
     function (data) {
       Highcharts.chart('hc-container', {
 
@@ -240,7 +240,7 @@
           },
 
         title: {
-            text: 'Trace of ' + n + ' points',
+            text: '2p Trace',
             style: {
               fontSize: "18px"
             }
@@ -256,7 +256,7 @@
         series: [{
             name: '2p Trace',
             color: "#ff0000",
-            data: data.data,
+            data: data.trace,
             tooltip: {
                 valueDecimals: 2
             },
@@ -272,8 +272,16 @@
       });
     });
 
+  function decodeLiquidUri(encodedStr) {
+    let parser = new DOMParser;
+    let dom = parser.parseFromString(
+      '<!doctype html><body>' + encodedStr, 
+      'text/html');
+    return dom.body.textContent
+  }
+
   // Get globals
-  var video = new Video("{{ task.input.video-source-ref }}"),
+  var video = new Video(decodeLiquidUri("{{ task.input.video-source-ref | grant_read_access }}")),
     videoButton = document.getElementById('play-pause'),
     colorblindMode = false,
     maskOverlays = false,
@@ -292,8 +300,8 @@
     overlay = getRoiOverlay();
   
   // Initialize canvases
-  overlayImages(avgProjection, "{{ task.input.avg-source-ref | grant_read_access }}", overlay.mask.src, overlay.opacity, overlay.filter);
-  overlayImages(maxProjection, "{{ task.input.max-source-ref | grant_read_access }}", overlay.mask.src, overlay.opacity, overlay.filter);
+  overlayImages(avgProjection, decodeLiquidUri("{{ task.input.avg-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity, overlay.filter);
+  overlayImages(maxProjection, decodeLiquidUri("{{ task.input.max-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity, overlay.filter);
   // Need greater than zero time to get the first frame to draw
   video.currentTime = 0.000001;
   videoProcessor();
@@ -400,8 +408,8 @@
     // Preload mask and outline images and save them in an object for toggling
     let outline = new Image();
     let mask = new Image();
-    outline.src = "{{ task.input.source-ref }}";
-    mask.src = "{{ task.input.roi-mask-source-ref }}";
+    outline.src = decodeLiquidUri("{{ task.input.source-ref | grant_read_access }}");
+    mask.src = decodeLiquidUri("{{ task.input.roi-mask-source-ref | grant_read_access }}");
     this.outline = outline;
     this.mask = mask;
   }
@@ -509,8 +517,8 @@
 
   function redrawCanvases() {
     let overlay = getRoiOverlay();
-    overlayImages(avgProjection, "{{ task.input.avg-source-ref }}", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
-    overlayImages(maxProjection, "{{ task.input.max-source-ref }}", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    overlayImages(avgProjection, decodeLiquidUri("{{ task.input.avg-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    overlayImages(maxProjection, decodeLiquidUri("{{ task.input.max-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
     videoProcessor();
   }
 
