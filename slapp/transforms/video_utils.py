@@ -58,7 +58,7 @@ def normalize_video(video: np.ndarray):
 
 
 def transform_to_mp4(video: np.ndarray, output_path: str,
-                     fps: int):
+                     fps: float):
     """
     Function to transform 2p gray scale video into a mp4
     video using imageio_ffmpeg.

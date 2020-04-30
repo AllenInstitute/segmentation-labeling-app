@@ -44,13 +44,13 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=True,
         default=0.1,
         description=("quantile threshold for outlining an ROI. "))
-    input_fps = argschema.fields.Int(
+    input_fps = argschema.fields.Float(
         required=False,
-        default=31,
+        default=31.0,
         description="frames per second of input movie")
-    output_fps = argschema.fields.Int(
+    output_fps = argschema.fields.Float(
         required=False,
-        default=4,
+        default=4.0,
         description="frames per second of downsampled movie")
     playback_factor = argschema.fields.Float(
         required=False,
