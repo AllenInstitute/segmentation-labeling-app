@@ -52,6 +52,11 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=4,
         description="frames per second of downsampled movie")
+    playback_factor = argschema.fields.Float(
+        required=False,
+        default=1.0,
+        description=("mp4 FPS and trace pointInterval will adjust by this "
+                     "factor relative to real time."))
     downsampling_strategy = argschema.fields.Str(
         required=False,
         default="average",
@@ -121,6 +126,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
         max_projection = np.max(downsampled_video, axis=0)
         avg_projection = np.mean(downsampled_video, axis=0)
 
+        playback_fps = self.args['output_fps'] * self.args['playback_factor']
+
         # create the per-ROI artifacts
         insert_statements = []
         for roi in rois:
@@ -149,7 +156,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             sub_video = np.pad(
                     downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
                     ((0, 0), *pads))
-            transform_to_mp4(sub_video, str(sub_video_path), 10)
+            transform_to_mp4(sub_video, str(sub_video_path), playback_fps)
 
             # sub-projections
             sub_max = np.pad(
@@ -168,7 +175,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
                     self.args['random_seed']).tolist()
             trace_json = {
                     "pointStart": 0,
-                    "pointInterval": 1.0 / self.args['output_fps'],
+                    "pointInterval": 1.0 / playback_fps,
                     "dataLength": len(trace),
                     "trace": trace}
             with open(trace_path, "w") as fp:
