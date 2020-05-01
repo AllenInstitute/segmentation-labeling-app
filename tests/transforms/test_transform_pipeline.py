@@ -138,4 +138,4 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     # Assert that created manifests are correct
     outdir_name = f"segmentation_run_id_{input_data['segmentation_run_id']}"
     expected_outdir = Path(input_data["artifact_basedir"]) / outdir_name
-    expected_calls = [call(m, expected_outdir) for m in expected_manifests]
+    [call(m, expected_outdir) for m in expected_manifests]
