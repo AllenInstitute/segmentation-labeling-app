@@ -10,7 +10,7 @@ from slapp.rois import ROI
 from slapp.transforms.video_utils import (
     downsample_h5_video, transform_to_mp4)
 from slapp.transforms.array_utils import (
-        content_extents, downsample_array)
+        content_extents, downsample_array, normalize_array)
 
 
 class TransformPipelineException(Exception):
@@ -66,6 +66,16 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=0,
         description="random seed to use if downsampling strategy is 'random'")
+    image_lower_quantile = argschema.fields.Float(
+        required=False,
+        default=0.2,
+        description=("lower quantile threshold for avg projection "
+                     "histogram adjustment"))
+    image_upper_quantile = argschema.fields.Float(
+        required=False,
+        default=0.999,
+        description=("upper quantile threshold for avg projection "
+                     "histogram adjustment"))
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -113,7 +123,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         # TODO: here could be a good place to put a pre-filtering stepw
         rois = [ROI.roi_from_query(roi_id, db_conn) for roi_id in roi_ids]
 
-        # load, downsample and project the source video
+        # load and downsample the source video
         query_string = ("SELECT * FROM segmentation_runs "
                         f"WHERE id={self.args['segmentation_run_id']}")
         seg_query = db_conn.query(query_string)[0]
@@ -123,8 +133,20 @@ class TransformPipeline(argschema.ArgSchemaParser):
                 self.args['output_fps'],
                 self.args['downsampling_strategy'],
                 self.args['random_seed'])
-        max_projection = np.max(downsampled_video, axis=0)
+
+        # strategy for normalization: normalize entire video and projections
+        # on quantiles of average projection before per-ROI processing
         avg_projection = np.mean(downsampled_video, axis=0)
+        lower_cutoff, upper_cutoff = np.quantile(
+                avg_projection.flatten(),
+                [
+                    self.args['image_lower_quantile'],
+                    self.args['image_upper_quantile']])
+        avg_projection = normalize_array(
+                avg_projection, lower_cutoff, upper_cutoff)
+        downsampled_video = normalize_array(
+                downsampled_video, lower_cutoff, upper_cutoff)
+        max_projection = np.max(downsampled_video, axis=0)
 
         playback_fps = self.args['output_fps'] * self.args['playback_factor']
 

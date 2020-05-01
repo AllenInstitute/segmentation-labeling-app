@@ -4,6 +4,7 @@ import cv2
 import imageio
 import h5py
 import slapp.transforms.video_utils as transformations
+from slapp.transforms.array_utils import normalize_array
 
 test_frame = np.arange(25).reshape(5, 5)
 test_video = np.stack([test_frame]*2, axis=0)
@@ -60,7 +61,10 @@ def test_mp4_conversion(video_fixture, tmp_path):
 
     fps = 30
 
-    transformations.transform_to_mp4(video=video_fixture,
+    normalized_video = normalize_array(
+            video_fixture, 0, video_fixture.max())
+
+    transformations.transform_to_mp4(video=normalized_video,
                                      output_path=output_path.as_posix(),
                                      fps=fps),
 
