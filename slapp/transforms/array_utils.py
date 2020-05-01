@@ -247,3 +247,31 @@ def downsample_array(
         array_out[i] = sampler(array, bin_indices)
 
     return array_out
+
+
+def normalize_array(
+        array: np.ndarray, lower_cutoff: float,
+        upper_cutoff: float) -> np.ndarray:
+    """Normalize an array into uint8 with cutoff values
+
+    Parameters
+    ----------
+    array: numpy.ndarray (float)
+        array to be normalized
+    lower_cutoff: float
+        threshold, below which will be = 0
+    upper_cutoff: float
+        threshold, abovewhich will be = 255
+
+    Returns
+    -------
+    normalized: numpy.ndarray (uint8)
+        normalized array
+
+    """
+    normalized = np.copy(array)
+    normalized[array < lower_cutoff] = lower_cutoff
+    normalized[array > upper_cutoff] = upper_cutoff
+    normalized -= lower_cutoff
+    normalized = np.uint8(normalized * 255 / (upper_cutoff - lower_cutoff))
+    return normalized
