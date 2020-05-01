@@ -77,6 +77,11 @@
     border: 10px solid rgba(235, 235, 235, 1.0);
     border-radius: 10px;
   }
+  .speed {
+    font-size: small;
+    position: relative;
+    top: -7;
+  }
 </style>
 
 
@@ -110,7 +115,15 @@
                 <span class="progress-bar">
                   <span id="progress-fill"></span>
                 </span>
-                <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+                  <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+                  <label class="speed" for="speed">Speed:</label>
+                  <select id="speed-button" class="speed" onchange="changeVideoSpeed()">
+                    <option value="1">1x</option>
+                    <option value="2">2x</option>
+                    <option value="4">3x</option>
+                    <option value="8">8x</option>
+                    <option value="16">16x</option>
+                  </select>
               </span>
             </div>
           </div>
@@ -130,7 +143,7 @@
             <span class="image-label">ROI Mask</span>
             <div class="image-container border"> 
               <!-- TODO: Replace with template vars -->
-                <img src="../resources/roi_mask_128x128.png"></span>
+                <img src="./resources/roi_mask_128x128.png"></span>
             </div>
           </div>
         </div>
@@ -223,7 +236,7 @@
 
   // Get globals
   // TODO: Use template vars
-  var video = new Video("../resources/exp_716956096_4hz_small_128x128.mp4"),
+  var video = new Video("./resources/exp_716956096_4hz_small_128x128.mp4"),
     videoButton = document.getElementById('play-pause'),
     colorblindMode = false,
     maskOverlays = false,
@@ -243,8 +256,8 @@
   
   // Initialize canvases
   // TODO: Replace with template vars
-  overlayImages(avgProjection, "../resources/avgint_128x128.png", overlay.mask.src, overlay.opacity, overlay.filter);
-  overlayImages(maxProjection, "../resources/maxint_128x128.png", overlay.mask.src, overlay.opacity, overlay.filter);
+  overlayImages(avgProjection, "./resources/avgint_128x128.png", overlay.mask.src, overlay.opacity, overlay.filter);
+  overlayImages(maxProjection, "./resources/maxint_128x128.png", overlay.mask.src, overlay.opacity, overlay.filter);
   // Need greater than zero time to get the first frame to draw
   video.currentTime = 0.000001;
   videoProcessor();
@@ -349,7 +362,6 @@
           }, false, null);
         },
         click: function (event) {
-          video.pause();
           video.currentTime = Math.floor(event.xAxis[0].value)
         },
       }
@@ -376,8 +388,13 @@
     },
 
     navigator: {
-      enabled: true,
-    },
+          enabled: true,
+          xAxis: {
+            labels: {
+              enabled: false
+            }
+          }
+        },
 
     series: [{
         name: 'Hourly data points',
@@ -390,7 +407,6 @@
         pointInterval: 0.002, //.25,     // seconds; 4 fps sampling is 250 ms per frame
         events: { 
           click: function (event) {
-            video.pause();
             video.currentTime = Math.floor(event.xAxis[0].value);
           },
         },
@@ -436,8 +452,8 @@
     // TODO: Replace with template vars
     let outline = new Image();
     let mask = new Image();
-    outline.src = "../resources/roi_mask_outline_128x128.png";
-    mask.src = "../resources/roi_mask_128x128.png";
+    outline.src = "./resources/roi_mask_outline_128x128.png";
+    mask.src = "./resources/roi_mask_128x128.png";
     this.outline = outline;
     this.mask = mask;
   }
@@ -547,8 +563,8 @@
   function redrawCanvases() {
     // TODO: Replace with template vars
     let overlay = getRoiOverlay();
-    overlayImages(avgProjection, "../resources/avgint_128x128.png", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
-    overlayImages(maxProjection, "../resources/maxint_128x128.png", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    overlayImages(avgProjection, "./resources/avgint_128x128.png", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    overlayImages(maxProjection, "./resources/maxint_128x128.png", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
     videoProcessor();
   }
 
@@ -585,5 +601,10 @@
     }
     video.addEventListener("timeupdate", pauseAtTime);
   };
+
+  function changeVideoSpeed(selection) {
+    let speed = parseInt(document.getElementById("speed-button").value);
+    video.playbackRate = speed;
+  }
 
   </script>

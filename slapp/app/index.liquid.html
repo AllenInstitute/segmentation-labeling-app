@@ -52,6 +52,9 @@
     margin-bottom: 20;
     font-size: small;
   }
+  .options {
+    font-size: small;
+  }
   .progress-bar {
     position: relative;
     display:flex;
@@ -76,6 +79,11 @@
     z-index: 100;
     border: 10px solid rgba(235, 235, 235, 1.0);
     border-radius: 10px;
+  }
+  .speed {
+    font-size: small;
+    position: relative;
+    top: -7;
   }
 </style>
 
@@ -109,7 +117,16 @@
                 <span class="progress-bar">
                   <span id="progress-fill"></span>
                 </span>
-                <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+                <span>
+                  <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+                  <label class=speed for="speed">Speed:</label>
+                  <select id="speed-button" class="speed" onchange="changeVideoSpeed()">
+                    <option value="1">1x</option>
+                    <option value="2">2x</option>
+                    <option value="4">3x</option>
+                    <option value="8">8x</option>
+                    <option value="16">16x</option>
+                </span>
               </span>
             </div>
           </div>
@@ -128,7 +145,7 @@
           <div class="col-sm">
             <span class="image-label">ROI Mask</span>
             <div class="image-container border"> 
-                <img src="{{ task.input.source-ref | grant_read_access }}"></span>
+                <img src="{{ task.input.roi-mask-source-ref | grant_read_access }}"></span>
             </div>
           </div>
         </div>
@@ -223,8 +240,7 @@
               }, false, null);
             },
             click: function (event) {
-              video.pause();
-              video.currentTime = Math.floor(event.xAxis[0].value)
+              video.currentTime = event.xAxis[0].value;
             },
           }
         },
@@ -251,6 +267,11 @@
 
         navigator: {
           enabled: true,
+          xAxis: {
+            labels: {
+              enabled: false
+            }
+          }
         },
 
         series: [{
@@ -264,8 +285,7 @@
             pointInterval: data.pointInterval, 
             events: { 
               click: function (event) {
-                video.pause();
-                video.currentTime = Math.floor(event.xAxis[0].value);
+                video.currentTime = event.xAxis[0].value;
               },
             },
         }]
@@ -366,9 +386,6 @@
       video.pause();
     }
   });
-
-  // Create the chart
-  
 
   function overlayImages(canvas, underlay, overlay, alpha, filter) {
     // Draw two images on canvas. The alpha and filter values will be
@@ -555,5 +572,10 @@
     }
     video.addEventListener("timeupdate", pauseAtTime);
   };
+
+  function changeVideoSpeed(selection) {
+    let speed = parseInt(document.getElementById("speed-button").value);
+    video.playbackRate = speed;
+  }
 
   </script>
