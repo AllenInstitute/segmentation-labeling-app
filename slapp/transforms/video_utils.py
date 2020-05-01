@@ -47,7 +47,7 @@ def downsample_h5_video(
 
 
 def transform_to_mp4(video: np.ndarray, output_path: str,
-                     fps: float):
+                     fps: float, bitrate: str = "192k"):
     """
     Function to transform 2p gray scale video into a mp4
     video using imageio_ffmpeg.
@@ -63,7 +63,8 @@ def transform_to_mp4(video: np.ndarray, output_path: str,
                               video[0].shape,
                               pix_fmt_in="gray",
                               pix_fmt_out="gray",
-                              fps=fps)
+                              fps=fps,
+                              bitrate=bitrate)
     writer.send(None)
     for frame in video:
         writer.send(frame)

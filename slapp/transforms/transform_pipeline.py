@@ -76,6 +76,10 @@ class TransformPipelineSchema(argschema.ArgSchema):
         default=0.999,
         description=("upper quantile threshold for avg projection "
                      "histogram adjustment"))
+    mp4_bitrate = argschema.fields.Str(
+        required=False,
+        default="192k",
+        description="passed as bitrate to imageio-ffmpeg.write_frames()")
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -178,7 +182,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
             sub_video = np.pad(
                     downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
                     ((0, 0), *pads))
-            transform_to_mp4(sub_video, str(sub_video_path), playback_fps)
+            transform_to_mp4(
+                    sub_video, str(sub_video_path),
+                    playback_fps, self.args['mp4_bitrate'])
 
             # sub-projections
             sub_max = np.pad(
