@@ -90,17 +90,23 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
         manifest = create_expected_manifest(**meta, save_path=str(tmp_path))
         expected_manifests.append(manifest)
 
+    def normalize_side_effect(value, dummya, dummyb):
+        return value
+
     mock_downsample_h5_video = MagicMock(return_value=np.zeros((3, 5, 5)))
+    mock_normalize = MagicMock(side_effect=normalize_side_effect)
     mock_imageio = MagicMock()
     mock_content_extents = MagicMock(return_value=([0, 0, 2, 2], [1, 1, 1, 1]))
     mock_transform_to_mp4 = MagicMock()
     mock_np = MagicMock()
+    mock_np.quantile = MagicMock(return_value=(0, 1))
 
     mpatcher = partial(monkeypatch.setattr, target=transform_pipeline)
     mpatcher(name="ROI", value=mock_roi)
     mpatcher(name="downsample_h5_video", value=mock_downsample_h5_video)
     mpatcher(name="imageio", value=mock_imageio)
     mpatcher(name="content_extents", value=mock_content_extents)
+    mpatcher(name="normalize_array", value=mock_normalize)
     mpatcher(name="transform_to_mp4", value=mock_transform_to_mp4)
     mpatcher(name="np", value=mock_np)
 
