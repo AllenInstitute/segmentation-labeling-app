@@ -53,7 +53,7 @@
     font-size: small;
   }
   .options {
-    font-size: small;
+    font-size: x-small;
   }
   .progress-bar {
     position: relative;
@@ -81,7 +81,7 @@
     border-radius: 10px;
   }
   .speed {
-    font-size: small;
+    font-size: x-small;
     position: relative;
     top: -7;
   }
@@ -126,6 +126,7 @@
                     <option value="4">3x</option>
                     <option value="8">8x</option>
                     <option value="16">16x</option>
+                  </select>
                 </span>
               </span>
             </div>
@@ -200,9 +201,10 @@
 
 <script>
   let jsonPath = decodeLiquidUri("{{ task.input.trace-source-ref | grant_read_access }}");
+  var chart;
   Highcharts.getJSON(jsonPath, 
     function (data) {
-      Highcharts.chart('hc-container', {
+      chart = Highcharts.chart('hc-container', {
 
         chart : {
           zoomType: 'x',
@@ -263,6 +265,14 @@
         },
         yAxis: {
           minPadding: 0
+        },
+
+        xAxis: {
+          plotLines: [{
+            color: 'gray',
+            width: 1,
+            value: 0
+          }],
         },
 
         navigator: {
@@ -577,5 +587,15 @@
     let speed = parseInt(document.getElementById("speed-button").value);
     video.playbackRate = speed;
   }
+
+  function moveTraceLine() {
+    let traceLineOptions = chart.xAxis[0].plotLinesAndBands[0].options;    
+    traceLineOptions.value = video.currentTime;
+    chart.xAxis[0].update({
+      plotLines: [traceLineOptions]
+    });
+  }
+  
+  video.addEventListener("timeupdate", moveTraceLine);
 
   </script>
