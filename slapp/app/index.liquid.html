@@ -52,6 +52,9 @@
     margin-bottom: 20;
     font-size: small;
   }
+  .options {
+    font-size: x-small;
+  }
   .progress-bar {
     position: relative;
     display:flex;
@@ -77,8 +80,12 @@
     border: 10px solid rgba(235, 235, 235, 1.0);
     border-radius: 10px;
   }
+  .speed {
+    font-size: x-small;
+    position: relative;
+    top: -7;
+  }
 </style>
-
 
 <crowd-form>
   <crowd-classifier
@@ -110,7 +117,17 @@
                 <span class="progress-bar">
                   <span id="progress-fill"></span>
                 </span>
-                <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+                <span>
+                  <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
+                  <label class=speed for="speed">Speed:</label>
+                  <select id="speed-button" class="speed" onchange="changeVideoSpeed()">
+                    <option value="1">1x</option>
+                    <option value="2">2x</option>
+                    <option value="4">3x</option>
+                    <option value="8">8x</option>
+                    <option value="16">16x</option>
+                  </select>
+                </span>
               </span>
             </div>
           </div>
@@ -129,8 +146,7 @@
           <div class="col-sm">
             <span class="image-label">ROI Mask</span>
             <div class="image-container border"> 
-              <!-- TODO: Replace with template vars -->
-                <img src="../resources/roi_mask_128x128.png"></span>
+                <img src="{{ task.input.roi-mask-source-ref | grant_read_access }}"></span>
             </div>
           </div>
         </div>
@@ -184,46 +200,118 @@
 </crowd-form>
 
 <script>
-  // --- generate dummy data  --- //
-  function getData(n) {
-    var arr = [],
-        i,
-        x,
-        a,
-        b,
-        c,
-        spike;
-    for (
-        i = 0, x = Date.UTC(new Date().getUTCFullYear(), 0, 1) - n * 36e5;
-        i < n;
-        i = i + 1, x = x + 36e5
-    ) {
-        if (i % 100 === 0) {
-            a = 2 * Math.random();
-        }
-        if (i % 1000 === 0) {
-            b = 2 * Math.random();
-        }
-        if (i % 10000 === 0) {
-            c = 2 * Math.random();
-        }
-        if (i % 50000 === 0) {
-            spike = 10;
-        } else {
-            spike = 0;
-        }
-        arr.push(
-            2 * Math.sin(i / 100) + a + b + c + spike + Math.random()
-        );
-    }
-    return arr;
-}
-  let n = 26 * 500,   // Seconds in movie with fake 2ms sampling rate
-    data = getData(n);
+  let jsonPath = decodeLiquidUri("{{ task.input.trace-source-ref | grant_read_access }}");
+  var chart;
+  Highcharts.getJSON(jsonPath, 
+    function (data) {
+      chart = Highcharts.chart('hc-container', {
+
+        chart : {
+          zoomType: 'x',
+          events: {
+            load: function() {
+              var ch = this
+              
+              playSelection = ch.renderer.button('Play Selection', null, null, function(){
+                var extremes = ch.xAxis[0].getExtremes();
+                playVideoSelection(video, extremes.min, extremes.max);
+              }, {
+                  zIndex: 20
+              }).attr({
+                id: 'playSelection',
+                align: 'left',
+                title: 'Play video selection'
+              }).add().align({
+                align: 'left',
+                x: 15,
+                y: 5
+              }, false, null);
+
+              zoomButton = ch.renderer.button('Reset zoom', null, null, function(){
+                ch.xAxis[0].setExtremes(null, null);
+              }, {
+                  zIndex: 20
+              }).attr({
+                id: 'resetZoom',
+                align: 'right',
+                title: 'Reset zoom level 1:1'
+              }).add().align({
+                align: 'right',
+                x: -15,
+                y: 5
+              }, false, null);
+            },
+            click: function (event) {
+              video.currentTime = event.xAxis[0].value;
+            },
+          }
+        },
+
+        legend: {
+          enabled: false
+        },
+
+        caption: {
+          text: "Click a point on the ROI trace to jump to that point in the video. "+
+                "Select points by dragging on the chart, or by adjusting the navigation bar. "+
+                "Play movie for the selected timestamps by clicking the 'Play Selection' button."
+          },
+
+        title: {
+            text: '2p Trace',
+            style: {
+              fontSize: "18px"
+            }
+        },
+        yAxis: {
+          minPadding: 0
+        },
+
+        xAxis: {
+          plotLines: [{
+            color: 'gray',
+            width: 1,
+            value: 0
+          }],
+        },
+
+        navigator: {
+          enabled: true,
+          xAxis: {
+            labels: {
+              enabled: false
+            }
+          }
+        },
+
+        series: [{
+            name: '2p Trace',
+            color: "#ff0000",
+            data: data.trace,
+            tooltip: {
+                valueDecimals: 2
+            },
+            pointStart: data.pointStart,
+            pointInterval: data.pointInterval, 
+            events: { 
+              click: function (event) {
+                video.currentTime = event.xAxis[0].value;
+              },
+            },
+        }]
+      });
+    });
+
+  function decodeLiquidUri(encodedStr) {
+    let parser = new DOMParser;
+    let dom = parser.parseFromString(
+      '<!doctype html><body>' + encodedStr, 
+      'text/html');
+    return dom.body.textContent
+  }
 
   // Get globals
-  // TODO: Use template vars
-  var video = new Video("../resources/exp_716956096_4hz_small_128x128.mp4"),
+  var video = new Video(decodeLiquidUri("{{ task.input.video-source-ref | grant_read_access }}")),
     videoButton = document.getElementById('play-pause'),
     colorblindMode = false,
     maskOverlays = false,
@@ -242,9 +330,8 @@
     overlay = getRoiOverlay();
   
   // Initialize canvases
-  // TODO: Replace with template vars
-  overlayImages(avgProjection, "../resources/avgint_128x128.png", overlay.mask.src, overlay.opacity, overlay.filter);
-  overlayImages(maxProjection, "../resources/maxint_128x128.png", overlay.mask.src, overlay.opacity, overlay.filter);
+  overlayImages(avgProjection, decodeLiquidUri("{{ task.input.avg-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity, overlay.filter);
+  overlayImages(maxProjection, decodeLiquidUri("{{ task.input.max-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity, overlay.filter);
   // Need greater than zero time to get the first frame to draw
   video.currentTime = 0.000001;
   videoProcessor();
@@ -310,93 +397,6 @@
     }
   });
 
-  // Create the chart
-  Highcharts.chart('hc-container', {
-
-    chart : {
-      zoomType: 'x',
-      events: {
-        load: function() {
-          var ch = this
-          
-          playSelection = ch.renderer.button('Play Selection', null, null, function(){
-            var extremes = ch.xAxis[0].getExtremes();
-            playVideoSelection(video, extremes.min, extremes.max);
-          }, {
-              zIndex: 20
-          }).attr({
-            id: 'playSelection',
-            align: 'left',
-            title: 'Play video selection'
-          }).add().align({
-            align: 'left',
-            x: 15,
-            y: 5
-          }, false, null);
-
-          zoomButton = ch.renderer.button('Reset zoom', null, null, function(){
-            ch.xAxis[0].setExtremes(null, null);
-          }, {
-              zIndex: 20
-          }).attr({
-            id: 'resetZoom',
-            align: 'right',
-            title: 'Reset zoom level 1:1'
-          }).add().align({
-            align: 'right',
-            x: -15,
-            y: 5
-          }, false, null);
-        },
-        click: function (event) {
-          video.pause();
-          video.currentTime = Math.floor(event.xAxis[0].value)
-        },
-      }
-    },
-
-    legend: {
-      enabled: false
-    },
-
-    caption: {
-      text: "Click a point on the ROI trace to jump to that point in the video. "+
-            "Select points by dragging on the chart, or by adjusting the navigation bar. "+
-            "Play movie for the selected timestamps by clicking the 'Play Selection' button."
-      },
-
-    title: {
-        text: 'Trace of ' + n + ' points',
-        style: {
-          fontSize: "18px"
-        }
-    },
-    yAxis: {
-      minPadding: 0
-    },
-
-    navigator: {
-      enabled: true,
-    },
-
-    series: [{
-        name: 'Hourly data points',
-        color: "#ff0000",
-        data: data,
-        tooltip: {
-            valueDecimals: 2
-        },
-        pointStart: 0,
-        pointInterval: 0.002, //.25,     // seconds; 4 fps sampling is 250 ms per frame
-        events: { 
-          click: function (event) {
-            video.pause();
-            video.currentTime = Math.floor(event.xAxis[0].value);
-          },
-        },
-    }]
-  });
-
   function overlayImages(canvas, underlay, overlay, alpha, filter) {
     // Draw two images on canvas. The alpha and filter values will be
     // applied to the overlay image.
@@ -433,11 +433,10 @@
 
   function RoiImages() {
     // Preload mask and outline images and save them in an object for toggling
-    // TODO: Replace with template vars
     let outline = new Image();
     let mask = new Image();
-    outline.src = "../resources/roi_mask_outline_128x128.png";
-    mask.src = "../resources/roi_mask_128x128.png";
+    outline.src = decodeLiquidUri("{{ task.input.source-ref | grant_read_access }}");
+    mask.src = decodeLiquidUri("{{ task.input.roi-mask-source-ref | grant_read_access }}");
     this.outline = outline;
     this.mask = mask;
   }
@@ -471,7 +470,6 @@
 
   function videoProcessor() {
     // Draw the video frames on canvas (with overlay)
-    // TODO: Additional contrast/brightness controls
     function step() {
       brightnessContrast(ctx)
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -545,10 +543,9 @@
   }
 
   function redrawCanvases() {
-    // TODO: Replace with template vars
     let overlay = getRoiOverlay();
-    overlayImages(avgProjection, "../resources/avgint_128x128.png", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
-    overlayImages(maxProjection, "../resources/maxint_128x128.png", overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    overlayImages(avgProjection, decodeLiquidUri("{{ task.input.avg-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    overlayImages(maxProjection, decodeLiquidUri("{{ task.input.max-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
     videoProcessor();
   }
 
@@ -585,5 +582,20 @@
     }
     video.addEventListener("timeupdate", pauseAtTime);
   };
+
+  function changeVideoSpeed(selection) {
+    let speed = parseInt(document.getElementById("speed-button").value);
+    video.playbackRate = speed;
+  }
+
+  function moveTraceLine() {
+    let traceLineOptions = chart.xAxis[0].plotLinesAndBands[0].options;    
+    traceLineOptions.value = video.currentTime;
+    chart.xAxis[0].update({
+      plotLines: [traceLineOptions]
+    });
+  }
+  
+  video.addEventListener("timeupdate", moveTraceLine);
 
   </script>
