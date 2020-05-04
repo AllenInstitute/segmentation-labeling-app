@@ -141,16 +141,21 @@ class TransformPipeline(argschema.ArgSchemaParser):
         # strategy for normalization: normalize entire video and projections
         # on quantiles of average projection before per-ROI processing
         avg_projection = np.mean(downsampled_video, axis=0)
+        max_projection = np.max(downsampled_video, axis=0)
+        quantiles = [self.args['image_lower_quantile'],
+                     self.args['image_upper_quantile']]
+        # normalize movie and avg according to avg quantiles
         lower_cutoff, upper_cutoff = np.quantile(
-                avg_projection.flatten(),
-                [
-                    self.args['image_lower_quantile'],
-                    self.args['image_upper_quantile']])
+                avg_projection.flatten(), quantiles)
         avg_projection = normalize_array(
                 avg_projection, lower_cutoff, upper_cutoff)
         downsampled_video = normalize_array(
                 downsampled_video, lower_cutoff, upper_cutoff)
-        max_projection = np.max(downsampled_video, axis=0)
+        # normalize max on its own quantiles, to avoid saturation
+        lower_cutoff, upper_cutoff = np.quantile(
+                max_projection.flatten(), quantiles)
+        max_projection = normalize_array(
+                max_projection, lower_cutoff, upper_cutoff)
 
         playback_fps = self.args['output_fps'] * self.args['playback_factor']
 
