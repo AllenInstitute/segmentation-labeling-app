@@ -115,9 +115,10 @@ class TransformPipeline(argschema.ArgSchemaParser):
     default_schema = TransformPipelineSchema
 
     def run(self, db_conn: query_utils.DbConnection):
+        self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         output_dir = Path(self.args['artifact_basedir']) / \
-                     f"seg_run_id_{self.args['segmentation_run_id']}" / \
-                     datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+            f"seg_run_id_{self.args['segmentation_run_id']}" / \
+            self.timestamp
         os.makedirs(output_dir, exist_ok=True)
 
         # get all ROI ids from this segmentation run
