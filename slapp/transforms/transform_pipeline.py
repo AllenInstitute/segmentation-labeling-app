@@ -5,6 +5,7 @@ import os
 import json
 import imageio
 import numpy as np
+import datetime
 import slapp.utils.query_utils as query_utils
 from slapp.rois import ROI
 from slapp.transforms.video_utils import (
@@ -115,7 +116,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
     def run(self, db_conn: query_utils.DbConnection):
         output_dir = Path(self.args['artifact_basedir']) / \
-                     f"segmentation_run_id_{self.args['segmentation_run_id']}"
+                     f"seg_run_id_{self.args['segmentation_run_id']}" / \
+                     datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         os.makedirs(output_dir, exist_ok=True)
 
         # get all ROI ids from this segmentation run
