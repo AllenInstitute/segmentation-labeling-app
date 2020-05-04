@@ -38,8 +38,8 @@ def mock_roi():
 
 
 def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
-                             save_path):
-    out_dirname = f"segmentation_run_id_{segmentation_run_id}"
+                             save_path, dtime):
+    out_dirname = f"seg_run_id_{segmentation_run_id}/{dtime}"
     expected_manifest = {
         "experiment-id": experiment_id,
         "roi-id": roi_id,
@@ -85,11 +85,6 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
 
     input_data["artifact_basedir"] = str(tmp_path)
 
-    expected_manifests = []
-    for meta in expected_manifest_metadata:
-        manifest = create_expected_manifest(**meta, save_path=str(tmp_path))
-        expected_manifests.append(manifest)
-
     def normalize_side_effect(value, dummya, dummyb):
         return value
 
@@ -115,6 +110,12 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
                                                     args=[])
     pipeline.run(mock_db_conn_fixture)
 
+    expected_manifests = []
+    for meta in expected_manifest_metadata:
+        manifest = create_expected_manifest(
+                **meta, save_path=str(tmp_path), dtime=pipeline.timestamp)
+        expected_manifests.append(manifest)
+
     # Assert downsample called with correct video path
     mock_downsample_h5_video.assert_called_once_with(
             Path(source_video),
@@ -136,6 +137,6 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
         mock_imageio.imsave.assert_has_calls(calls, any_order=False)
 
     # Assert that created manifests are correct
-    outdir_name = f"segmentation_run_id_{input_data['segmentation_run_id']}"
+    outdir_name = f"seg_run_id_{input_data['segmentation_run_id']}"
     expected_outdir = Path(input_data["artifact_basedir"]) / outdir_name
     [call(m, expected_outdir) for m in expected_manifests]
