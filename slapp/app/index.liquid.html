@@ -72,18 +72,28 @@
     flex:10;
     flex-basis:0%;
   }
-  .image-container:hover #avg-projection, .image-container:hover #max-projection, .image-container:hover #roi-vid{
+  .image-container:hover * {
     transform: scale(2);
     transition: transform 0.35s ease-in-out;
     position: relative;
     z-index: 100;
-    border: 10px solid rgba(235, 235, 235, 1.0);
+    border: 10px solid rgba(235, 235, 235, 1.0) !important;
     border-radius: 10px;
   }
   .speed {
     font-size: x-small;
     position: relative;
     top: -7;
+  }
+  #roi-mask-thumb {
+    background-color: white;
+    border: 1px solid gray;
+  }
+  .note {
+    font-size: small;
+    position: relative;
+    top: -25;
+    font-style: italic;
   }
 </style>
 
@@ -145,9 +155,10 @@
           </div>
           <div class="col-sm">
             <span class="image-label">ROI Mask</span>
-            <div class="image-container border"> 
-                <img src="{{ task.input.roi-mask-source-ref | grant_read_access }}"></span>
+            <div class="image-container"> 
+                <img id="roi-mask-thumb" src="{{ task.input.roi-mask-source-ref | grant_read_access }}">
             </div>
+            <span class="note">(Darker colors indicate higher confidence)</span>
           </div>
         </div>
         <div class="row">
@@ -273,6 +284,9 @@
             width: 1,
             value: 0
           }],
+          title: {
+            text: "time (sec)"
+          }
         },
 
         navigator: {
@@ -295,7 +309,7 @@
             pointInterval: data.pointInterval, 
             events: { 
               click: function (event) {
-                video.currentTime = event.xAxis[0].value;
+                video.currentTime = event.point.x;
               },
             },
         }]

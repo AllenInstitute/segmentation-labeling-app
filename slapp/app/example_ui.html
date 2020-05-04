@@ -69,18 +69,28 @@
     flex:10;
     flex-basis:0%;
   }
-  .image-container:hover #avg-projection, .image-container:hover #max-projection, .image-container:hover #roi-vid{
+  .image-container:hover * {
     transform: scale(2);
     transition: transform 0.35s ease-in-out;
     position: relative;
     z-index: 100;
-    border: 10px solid rgba(235, 235, 235, 1.0);
+    border: 10px solid rgba(235, 235, 235, 1.0) !important;
     border-radius: 10px;
+  }
+  #roi-mask-thumb {
+    background-color: white;
+    border: 1px solid gray;
   }
   .speed {
     font-size: small;
     position: relative;
     top: -7;
+  }
+  .note {
+    font-size: small;
+    position: relative;
+    top: -25;
+    font-style: italic;
   }
 </style>
 
@@ -141,10 +151,11 @@
           </div>
           <div class="col-sm">
             <span class="image-label">ROI Mask</span>
-            <div class="image-container border"> 
+            <div class="image-container"> 
               <!-- TODO: Replace with template vars -->
-                <img src="./resources/roi_mask_128x128.png"></span>
+                <img id="roi-mask-thumb" src="./resources/roi_mask_128x128.png"></span>
             </div>
+            <span class="note">(Darker colors indicate higher confidence)</span>
           </div>
         </div>
         <div class="row">
@@ -391,8 +402,11 @@
       plotLines: [{
         color: 'gray',
         width: 1,
-        value: 0
+        value: 0,
       }],
+      title: {
+        text: "time (sec)"
+      }
     },
 
     navigator: {
@@ -415,7 +429,7 @@
         pointInterval: 0.002, //.25,     // seconds; 4 fps sampling is 250 ms per frame
         events: { 
           click: function (event) {
-            video.currentTime = Math.floor(event.xAxis[0].value);
+            video.currentTime = Math.floor(event.point.x);
           },
         },
     }]
