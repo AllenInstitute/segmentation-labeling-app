@@ -1,82 +1,77 @@
 import pytest
-import json
-
+from pathlib import Path
 import boto3
-from moto import (mock_s3)
+from moto import mock_s3
 
-import slapp.lambdas.post_annotation as post_annotation_lambda
+from slapp.lambdas.post_annotation import lambda_handler as post_lambda
 
 
-@pytest.fixture()
-def json_fixture():
-    default_data = [
+consolidation_request = {
+    "version": "2018-10-06",
+    "labelingJobArn": "arn:aws:sagemaker:us-west-2:111111111111:labeling-job",
+    "payload": {
+       "s3Uri": "s3://test-bucket/consolidation_payload.json"
+    },
+    "labelAttributeName": "test-label-job",
+    "roleArn": "awn:aws:us-west-2:111111111111:labeling-job"
+ }
+
+consolidation_payload = str(
+    Path(__file__).parent / "resources" / "consolidation_payload.json")
+
+
+@pytest.fixture
+def s3_bucket(scope="function"):
+    mock = mock_s3()
+    mock.start()
+    s3 = boto3.resource("s3")
+    s3.create_bucket(Bucket="test-bucket")
+    s3.meta.client.upload_file(consolidation_payload, "test-bucket",
+                               "consolidation_payload.json")
+    yield
+    mock.stop()
+
+
+def test_post_annotation_lambda(s3_bucket):
+    expected = [
         {
-            "datasetObjectId": 'dummy_id',
-            "dataObject":
-            {
-                "s3Uri": "dummy_id",
-                "content": "dummy"
-            },
-            "annotations":
-                [{
-                    "workerId": "dummy",
-                    "annotationData":
-                    {
-                        "content":
-                            '{ "name": "John", "age": 30, "car": "None" }',
-                        "s3Uri": "dummy"
+            "datasetObjectId": "1",
+            "consolidatedAnnotation": {
+                "content": {
+                    "test-label-job": {
+                        "sourceData": "s3://test-bucket/test-img.png",
+                        "majorityLabel": "cell",
+                        "workerAnnotations": [
+                            {"workerId": "private.us-west-2.11111",
+                             "roiLabel": "not cell"},
+                            {"workerId": "private.us-west-2.22222",
+                             "roiLabel": "cell"},
+                            {"workerId": "private.us-west-2.33333",
+                             "roiLabel": "cell"},
+                        ]
                     }
-                }]
-        }
-    ]
-    yield default_data
-
-
-def payload_fixture(updates: dict):
-    default = {
-        "version": "2018-10-16",
-        "labelingJobArn": "arn:aws:sagemaker:us-east-1:123456789012:labeling-job/example-job",    # noqa
-        "labelCategories": ['True', 'False', 'Unknown'],
-        "labelAttributeName": 'Valid Cell',
-        "roleArn": "string",
-        "payload": {
-                       "s3Uri": "file:///"
-        }
-    }
-    for key, value in updates.items():
-        default[key] = value
-    return default
-
-
-@mock_s3
-@pytest.mark.parametrize("json_fixture", [({})],
-                         indirect=["json_fixture"])
-def test_post_annotation_lambda(json_fixture):
-    payload_update = {"s3Uri": "s3://test_bucket/key/file.txt"}
-    payload_fix = payload_fixture({"payload": payload_update})
-
-    client = boto3.client('s3')
-    client.create_bucket(Bucket="test_bucket")
-    client.put_object(Bucket="test_bucket", Key="key/file.txt",
-                      Body=json.dumps(json_fixture))
-
-    dataset = json_fixture[0]
-    annotation = dataset['annotations'][0]
-    new_annotation = json.loads(annotation['annotationData']['content'])
-
-    expected_response = {
-        'datasetObjectId': dataset['datasetObjectId'],
-        'consolidatedAnnotation': {
-            'content': {
-                payload_fix['labelAttributeName']: {
-                    'workerId': annotation['workerId'],
-                    'result': new_annotation,
-                    'labeledContent': dataset['dataObject']
                 }
             }
-        }
-    }
-
-    consolidate_response = post_annotation_lambda.lambda_handler(
-        event=payload_fix, context=None)
-    assert expected_response == consolidate_response[0]
+        },
+        {
+            "datasetObjectId": "3",
+            "consolidatedAnnotation": {
+                "content": {
+                    "test-label-job": {
+                        "sourceData": "s3://test-bucket/test-img-2.png",
+                        "majorityLabel": "not cell",
+                        "workerAnnotations": [
+                            {"workerId": "private.us-west-2.11111",
+                             "roiLabel": "not cell"},
+                            {"workerId": "private.us-west-2.22222",
+                             "roiLabel": "not cell"},
+                            {"workerId": "private.us-west-2.33333",
+                             "roiLabel": "not cell"},
+                        ]
+                    }
+                }
+            }
+        },
+    ]
+    actual = post_lambda(consolidation_request, None)
+    assert expected == actual
