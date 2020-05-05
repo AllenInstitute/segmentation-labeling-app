@@ -1,0 +1,54 @@
+[
+    {
+      "datasetObjectId": "1",
+      "dataObject": {
+        "s3Uri": "s3://test-bucket/test-img.png"
+      },
+      "annotations": [
+        {
+          "workerId": "private.us-west-2.11111",
+          "annotationData": {
+            "content": "{\"brightness\":\"100\",\"contrast\":\"100\",\"roiLabel\":{\"label\":\"not cell\"}}"
+          }
+        },
+        {
+          "workerId": "private.us-west-2.22222",
+          "annotationData": {
+            "content": "{\"brightness\":\"100\",\"contrast\":\"100\",\"roiLabel\":{\"label\":\"cell\"}}"
+          }
+        },
+        {
+          "workerId": "private.us-west-2.33333",
+          "annotationData": {
+            "content": "{\"brightness\":\"100\",\"contrast\":\"100\",\"roiLabel\":{\"label\":\"cell\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "datasetObjectId": "3",
+      "dataObject": {
+        "s3Uri": "s3://test-bucket/test-img-2.png"
+      },
+      "annotations": [
+        {
+          "workerId": "private.us-west-2.11111",
+          "annotationData": {
+            "content": "{\"brightness\":\"100\",\"contrast\":\"100\",\"roiLabel\":{\"label\":\"not cell\"}}"
+          }
+        },
+        {
+          "workerId": "private.us-west-2.22222",
+          "annotationData": {
+            "content": "{\"brightness\":\"100\",\"contrast\":\"100\",\"roiLabel\":{\"label\":\"not cell\"}}"
+          }
+        },
+        {
+          "workerId": "private.us-west-2.33333",
+          "annotationData": {
+            "content": "{\"brightness\":\"100\",\"contrast\":\"100\",\"roiLabel\":{\"label\":\"not cell\"}}"
+          }
+        }
+      ]
+    }
+  ]
