@@ -72,18 +72,24 @@
     flex:10;
     flex-basis:0%;
   }
-  .image-container:hover #avg-projection, .image-container:hover #max-projection, .image-container:hover #roi-vid{
+  .image-container:hover * {
     transform: scale(2);
     transition: transform 0.35s ease-in-out;
     position: relative;
     z-index: 100;
-    border: 10px solid rgba(235, 235, 235, 1.0);
+    border: 10px solid rgba(235, 235, 235, 1.0) !important;
     border-radius: 10px;
   }
   .speed {
     font-size: x-small;
     position: relative;
     top: -7;
+  }
+  .note {
+    font-size: small;
+    position: relative;
+    top: -25;
+    font-style: italic;
   }
 </style>
 
@@ -145,9 +151,10 @@
           </div>
           <div class="col-sm">
             <span class="image-label">ROI Mask</span>
-            <div class="image-container border"> 
-                <img src="{{ task.input.roi-mask-source-ref | grant_read_access }}"></span>
+            <div class="image-container"> 
+                <canvas id="roi-thumb" width="128" height="128"></canvas>
             </div>
+            <span class="note">(Lighter colors indicate higher weights)</span>
           </div>
         </div>
         <div class="row">
@@ -273,6 +280,9 @@
             width: 1,
             value: 0
           }],
+          title: {
+            text: "time (sec)"
+          }
         },
 
         navigator: {
@@ -295,7 +305,7 @@
             pointInterval: data.pointInterval, 
             events: { 
               click: function (event) {
-                video.currentTime = event.xAxis[0].value;
+                video.currentTime = event.point.x;
               },
             },
         }]
@@ -320,6 +330,7 @@
     canvas = document.getElementById("roi-vid"),
     avgProjection = document.getElementById("avg-projection"),
     maxProjection = document.getElementById("max-projection"),
+    roiThumbnail = document.getElementById("roi-thumb")
     roiOverlays = new RoiImages(),
     visButton = document.getElementById("toggle-roi"),
     toggleMaskButton = document.getElementById("toggle-mask"),
@@ -330,6 +341,7 @@
     overlay = getRoiOverlay();
   
   // Initialize canvases
+  overlayImages(roiThumbnail, decodeLiquidUri("{{ task.input.roi-mask-source-ref | grant_read_access }}"), decodeLiquidUri("{{ task.input.source-ref | grant_read_access }}"), 1.0, overlay.filter, "black");
   overlayImages(avgProjection, decodeLiquidUri("{{ task.input.avg-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity, overlay.filter);
   overlayImages(maxProjection, decodeLiquidUri("{{ task.input.max-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity, overlay.filter);
   // Need greater than zero time to get the first frame to draw
@@ -397,12 +409,16 @@
     }
   });
 
-  function overlayImages(canvas, underlay, overlay, alpha, filter) {
+  function overlayImages(canvas, underlay, overlay, alpha, filter, bgColor) {
     // Draw two images on canvas. The alpha and filter values will be
     // applied to the overlay image.
     let underImg = new Image();
     let overImg = new Image();
     let ctx = canvas.getContext("2d")
+    if (bgColor !== undefined) {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     underImg.onload = function () {
       overImg.src = overlay
     }
@@ -504,7 +520,6 @@
     } else {
       colorblindMode = true;
       colorButton.innerHTML = "Default Colors"
-
     }
     redrawCanvases();
   }
@@ -546,6 +561,7 @@
     let overlay = getRoiOverlay();
     overlayImages(avgProjection, decodeLiquidUri("{{ task.input.avg-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
     overlayImages(maxProjection, decodeLiquidUri("{{ task.input.max-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
+    overlayImages(roiThumbnail, decodeLiquidUri("{{ task.input.roi-mask-source-ref | grant_read_access }}"), decodeLiquidUri("{{ task.input.source-ref | grant_read_access }}"), overlay.visibility, overlay.filter, "black");
     videoProcessor();
   }
 
