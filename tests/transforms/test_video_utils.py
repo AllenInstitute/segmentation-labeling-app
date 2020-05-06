@@ -1,25 +1,8 @@
 import pytest
 import numpy as np
-import cv2
 import imageio
 import h5py
 import slapp.transforms.video_utils as transformations
-from slapp.transforms.array_utils import normalize_array
-
-test_frame = np.arange(25).reshape(5, 5)
-test_video = np.stack([test_frame]*2, axis=0)
-
-
-@pytest.fixture()
-def video_fixture():
-    video = np.array(
-        [[[5, 5], [5, 5]], [[2, 2], [2, 2]],
-         [[4, 4], [4, 4]], [[0, 0], [0, 0]],
-         [[3, 2], [10, 7]], [[11, 1], [0, 5]],
-         [[8, 2], [12, 1]], [[6, 3], [2, 8]],
-         [[11, 3], [1, 17]], [[8, 3], [9, 0]]]
-    )
-    yield video
 
 
 @pytest.mark.parametrize(
@@ -56,30 +39,33 @@ def test_video_downsample(
     assert np.array_equal(downsampled_video, expected)
 
 
-def test_mp4_conversion(video_fixture, tmp_path):
+def test_mp4_conversion(tmp_path):
+    # make the test video a size of at least 16x16
+    # otherwise, need to mess with macro_block_size arg
+    nframes_written = 25
     output_path = tmp_path / 'video.mp4'
-
     fps = 30
+    rng = np.random.default_rng(0)
+    video = np.array(
+            [rng.integers(0, 256, size=(16, 16), dtype='uint8')
+             for i in range(nframes_written)])
 
-    normalized_video = normalize_array(
-            video_fixture, 0, video_fixture.max())
-
-    transformations.transform_to_mp4(video=normalized_video,
+    transformations.transform_to_mp4(video=video,
                                      output_path=output_path.as_posix(),
                                      fps=fps),
 
-    frames = []
     reader = imageio.get_reader(output_path.as_posix(), mode='I', fps=fps,
-                                size=(2, 2), pixelformat="gray")
-    for frame in reader:
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        frames.append(gray_frame)
-    frames = np.stack(frames)
+                                pixelformat="gray")
+    meta = reader.get_meta_data()
+    nframes_read = int(np.round(meta['duration'] * meta['fps']))
 
-    # codec for mp4 encoding changes the video slightly between h5 and mp4
-    # and vice versa, so numbers are not exactly the same. Instead general
-    # structure of video array loaded. Cv color conversion does not rectify
-    # this error unfortunately, this has been attempted and small errors
-    # persist
+    assert nframes_read == nframes_written
 
-    assert frames.shape == video_fixture.shape
+    read_video = np.zeros((nframes_read, *meta['size']), dtype='uint8')
+    for i in range(nframes_read):
+        read_video[i] = reader.get_data(i)[:, :, 0]
+    reader.close()
+
+    assert read_video.shape == video.shape
+    # mp4 is not lossless compression, so can't test for exact match
+    np.testing.assert_allclose(read_video, video, atol=25)
