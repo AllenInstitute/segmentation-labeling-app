@@ -6,6 +6,7 @@ imageio-ffmpeg
 scipy
 pg8000
 pytest
+pytest-cov
 boto3
 moto
 ipywidgets
