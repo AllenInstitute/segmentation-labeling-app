@@ -1,4 +1,5 @@
 [![CircleCI](https://circleci.com/gh/AllenInstitute/segmentation-labeling-app.svg?style=svg)](https://circleci.com/gh/AllenInstitute/segmentation-labeling-app)
+[![codecov](https://codecov.io/gh/AllenInstitute/segmentation-labeling-app/branch/master/graph/badge.svg)](https://codecov.io/gh/AllenInstitute/segmentation-labeling-app)
 
 # segmentation-labeling-app
 This repository contains the required infrastructure and data transformations to deploy a custom labeling workflow using AWS Sagemaker Ground Truth. It is currently in active development. The community is welcome to use this repository as a template or resource for creating Sagemaker Ground Truth applications.
