@@ -4,6 +4,7 @@ from pathlib import Path
 from functools import partial
 import os
 import numpy as np
+import json
 
 from slapp.transforms import transform_pipeline
 
@@ -38,8 +39,8 @@ def mock_roi():
 
 
 def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
-                             save_path):
-    out_dirname = f"segmentation_run_id_{segmentation_run_id}"
+                             save_path, dtime):
+    out_dirname = f"seg_run_id_{segmentation_run_id}/{dtime}"
     expected_manifest = {
         "experiment-id": experiment_id,
         "roi-id": roi_id,
@@ -85,22 +86,23 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
 
     input_data["artifact_basedir"] = str(tmp_path)
 
-    expected_manifests = []
-    for meta in expected_manifest_metadata:
-        manifest = create_expected_manifest(**meta, save_path=str(tmp_path))
-        expected_manifests.append(manifest)
+    def normalize_side_effect(value, dummya, dummyb):
+        return value
 
     mock_downsample_h5_video = MagicMock(return_value=np.zeros((3, 5, 5)))
+    mock_normalize = MagicMock(side_effect=normalize_side_effect)
     mock_imageio = MagicMock()
     mock_content_extents = MagicMock(return_value=([0, 0, 2, 2], [1, 1, 1, 1]))
     mock_transform_to_mp4 = MagicMock()
     mock_np = MagicMock()
+    mock_np.quantile = MagicMock(return_value=(0, 1))
 
     mpatcher = partial(monkeypatch.setattr, target=transform_pipeline)
     mpatcher(name="ROI", value=mock_roi)
     mpatcher(name="downsample_h5_video", value=mock_downsample_h5_video)
     mpatcher(name="imageio", value=mock_imageio)
     mpatcher(name="content_extents", value=mock_content_extents)
+    mpatcher(name="normalize_array", value=mock_normalize)
     mpatcher(name="transform_to_mp4", value=mock_transform_to_mp4)
     mpatcher(name="np", value=mock_np)
 
@@ -108,6 +110,12 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     pipeline = transform_pipeline.TransformPipeline(input_data=input_data,
                                                     args=[])
     pipeline.run(mock_db_conn_fixture)
+
+    expected_manifests = []
+    for meta in expected_manifest_metadata:
+        manifest = create_expected_manifest(
+                **meta, save_path=str(tmp_path), dtime=pipeline.timestamp)
+        expected_manifests.append(manifest)
 
     # Assert downsample called with correct video path
     mock_downsample_h5_video.assert_called_once_with(
@@ -130,6 +138,12 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
         mock_imageio.imsave.assert_has_calls(calls, any_order=False)
 
     # Assert that created manifests are correct
-    outdir_name = f"segmentation_run_id_{input_data['segmentation_run_id']}"
-    expected_outdir = Path(input_data["artifact_basedir"]) / outdir_name
-    expected_calls = [call(m, expected_outdir) for m in expected_manifests]
+    expected_insert_statements = [
+            transform_pipeline.insert_str_template.format(
+                json.dumps(manifest),
+                os.environ['TRANSFORM_HASH'],
+                manifest['roi-id'])
+            for manifest in expected_manifests]
+
+    mock_db_conn_fixture.bulk_insert.assert_has_calls(
+            [call(expected_insert_statements)])

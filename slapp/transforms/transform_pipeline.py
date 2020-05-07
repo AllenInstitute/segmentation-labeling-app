@@ -5,12 +5,19 @@ import os
 import json
 import imageio
 import numpy as np
+import datetime
 import slapp.utils.query_utils as query_utils
 from slapp.rois import ROI
 from slapp.transforms.video_utils import (
     downsample_h5_video, transform_to_mp4)
 from slapp.transforms.array_utils import (
-        content_extents, downsample_array)
+        content_extents, downsample_array, normalize_array)
+
+
+insert_str_template = (
+        "INSERT INTO roi_manifests "
+        "(manifest, transform_hash, roi_id) "
+        "VALUES ('{}', '{}', {})")
 
 
 class TransformPipelineException(Exception):
@@ -44,14 +51,19 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=True,
         default=0.1,
         description=("quantile threshold for outlining an ROI. "))
-    input_fps = argschema.fields.Int(
+    input_fps = argschema.fields.Float(
         required=False,
-        default=31,
+        default=31.0,
         description="frames per second of input movie")
-    output_fps = argschema.fields.Int(
+    output_fps = argschema.fields.Float(
         required=False,
-        default=4,
+        default=4.0,
         description="frames per second of downsampled movie")
+    playback_factor = argschema.fields.Float(
+        required=False,
+        default=1.0,
+        description=("mp4 FPS and trace pointInterval will adjust by this "
+                     "factor relative to real time."))
     downsampling_strategy = argschema.fields.Str(
         required=False,
         default="average",
@@ -61,6 +73,20 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=0,
         description="random seed to use if downsampling strategy is 'random'")
+    image_lower_quantile = argschema.fields.Float(
+        required=False,
+        default=0.2,
+        description=("lower quantile threshold for avg projection "
+                     "histogram adjustment"))
+    image_upper_quantile = argschema.fields.Float(
+        required=False,
+        default=0.999,
+        description=("upper quantile threshold for avg projection "
+                     "histogram adjustment"))
+    mp4_bitrate = argschema.fields.Str(
+        required=False,
+        default="192k",
+        description="passed as bitrate to imageio-ffmpeg.write_frames()")
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -95,8 +121,10 @@ class TransformPipeline(argschema.ArgSchemaParser):
     default_schema = TransformPipelineSchema
 
     def run(self, db_conn: query_utils.DbConnection):
+        self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         output_dir = Path(self.args['artifact_basedir']) / \
-                     f"segmentation_run_id_{self.args['segmentation_run_id']}"
+            f"seg_run_id_{self.args['segmentation_run_id']}" / \
+            self.timestamp
         os.makedirs(output_dir, exist_ok=True)
 
         # get all ROI ids from this segmentation run
@@ -108,7 +136,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         # TODO: here could be a good place to put a pre-filtering stepw
         rois = [ROI.roi_from_query(roi_id, db_conn) for roi_id in roi_ids]
 
-        # load, downsample and project the source video
+        # load and downsample the source video
         query_string = ("SELECT * FROM segmentation_runs "
                         f"WHERE id={self.args['segmentation_run_id']}")
         seg_query = db_conn.query(query_string)[0]
@@ -118,8 +146,27 @@ class TransformPipeline(argschema.ArgSchemaParser):
                 self.args['output_fps'],
                 self.args['downsampling_strategy'],
                 self.args['random_seed'])
-        max_projection = np.max(downsampled_video, axis=0)
+
+        # strategy for normalization: normalize entire video and projections
+        # on quantiles of average projection before per-ROI processing
         avg_projection = np.mean(downsampled_video, axis=0)
+        max_projection = np.max(downsampled_video, axis=0)
+        quantiles = [self.args['image_lower_quantile'],
+                     self.args['image_upper_quantile']]
+        # normalize movie and avg according to avg quantiles
+        lower_cutoff, upper_cutoff = np.quantile(
+                avg_projection.flatten(), quantiles)
+        avg_projection = normalize_array(
+                avg_projection, lower_cutoff, upper_cutoff)
+        downsampled_video = normalize_array(
+                downsampled_video, lower_cutoff, upper_cutoff)
+        # normalize max on its own quantiles, to avoid saturation
+        lower_cutoff, upper_cutoff = np.quantile(
+                max_projection.flatten(), quantiles)
+        max_projection = normalize_array(
+                max_projection, lower_cutoff, upper_cutoff)
+
+        playback_fps = self.args['output_fps'] * self.args['playback_factor']
 
         # create the per-ROI artifacts
         insert_statements = []
@@ -149,7 +196,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
             sub_video = np.pad(
                     downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
                     ((0, 0), *pads))
-            transform_to_mp4(sub_video, str(sub_video_path), 10)
+            transform_to_mp4(
+                    sub_video, str(sub_video_path),
+                    playback_fps, self.args['mp4_bitrate'])
 
             # sub-projections
             sub_max = np.pad(
@@ -168,7 +217,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
                     self.args['random_seed']).tolist()
             trace_json = {
                     "pointStart": 0,
-                    "pointInterval": 1.0 / self.args['output_fps'],
+                    "pointInterval": 1.0 / playback_fps,
                     "dataLength": len(trace),
                     "trace": trace}
             with open(trace_path, "w") as fp:
@@ -185,11 +234,10 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['avg-source-ref'] = str(avg_proj_path)
             manifest['trace-source-ref'] = str(trace_path)
 
-            insert_str = (
-                    "INSERT INTO roi_manifests "
-                    "(manifest, transform_hash, roi_id) "
-                    f"VALUES ('{json.dumps(manifest)}', "
-                    f"'{os.environ['TRANSFORM_HASH']}', {roi.roi_id})")
+            insert_str = insert_str_template.format(
+                    json.dumps(manifest),
+                    os.environ['TRANSFORM_HASH'],
+                    roi.roi_id)
 
             insert_statements.append(insert_str)
 

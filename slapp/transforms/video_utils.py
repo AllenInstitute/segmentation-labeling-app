@@ -46,19 +46,8 @@ def downsample_h5_video(
     return video_out
 
 
-def normalize_video(video: np.ndarray):
-    """
-    Function to normalize video by its global max and maximum 8 bit value
-    Args:
-        video: Video to be normalized with shape (time, row, col)
-    Returns:
-        norm_frames: normalized video (time, row, col)
-    """
-    return np.uint8(video / video.max() * 255)
-
-
 def transform_to_mp4(video: np.ndarray, output_path: str,
-                     fps: int):
+                     fps: float, bitrate: str = "192k"):
     """
     Function to transform 2p gray scale video into a mp4
     video using imageio_ffmpeg.
@@ -70,13 +59,13 @@ def transform_to_mp4(video: np.ndarray, output_path: str,
     Returns:
 
     """
-    norm_video = normalize_video(video)
     writer = mpg.write_frames(output_path,
                               video[0].shape,
                               pix_fmt_in="gray",
                               pix_fmt_out="gray",
-                              fps=fps)
+                              fps=fps,
+                              bitrate=bitrate)
     writer.send(None)
-    for frame in norm_video:
+    for frame in video:
         writer.send(frame)
     writer.close()
