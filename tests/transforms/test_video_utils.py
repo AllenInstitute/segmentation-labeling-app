@@ -67,5 +67,6 @@ def test_mp4_conversion(tmp_path):
     reader.close()
 
     assert read_video.shape == video.shape
-    # mp4 is not lossless compression, so can't test for exact match
+    # the default settings for imageio-ffmpeg are not lossless
+    # so can't test for exact match
     np.testing.assert_allclose(read_video, video, atol=25)
