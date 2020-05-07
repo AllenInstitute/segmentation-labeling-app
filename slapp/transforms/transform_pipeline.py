@@ -14,6 +14,12 @@ from slapp.transforms.array_utils import (
         content_extents, downsample_array, normalize_array)
 
 
+insert_str_template = (
+        "INSERT INTO roi_manifests "
+        "(manifest, transform_hash, roi_id) "
+        "VALUES ('{}', '{}', {})")
+
+
 class TransformPipelineException(Exception):
     pass
 
@@ -228,11 +234,10 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['avg-source-ref'] = str(avg_proj_path)
             manifest['trace-source-ref'] = str(trace_path)
 
-            insert_str = (
-                    "INSERT INTO roi_manifests "
-                    "(manifest, transform_hash, roi_id) "
-                    f"VALUES ('{json.dumps(manifest)}', "
-                    f"'{os.environ['TRANSFORM_HASH']}', {roi.roi_id})")
+            insert_str = insert_str_template.format(
+                    json.dumps(manifest),
+                    os.environ['TRANSFORM_HASH'],
+                    roi.roi_id)
 
             insert_statements.append(insert_str)
 
