@@ -137,6 +137,12 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
         mock_imageio.imsave.assert_has_calls(calls, any_order=False)
 
     # Assert that created manifests are correct
-    outdir_name = f"seg_run_id_{input_data['segmentation_run_id']}"
-    expected_outdir = Path(input_data["artifact_basedir"]) / outdir_name
-    [call(m, expected_outdir) for m in expected_manifests]
+    expected_insert_statements = [
+            transform_pipeline.insert_str_template.format(
+                manifest,
+                os.environ['TRANSFORM_HASH'],
+                manifest['roi-id'])
+            for manifest in expected_manifests]
+
+    mock_db_conn_fixture.bulk_insert.assert_has_calls(
+            [call(expected_insert_statements)])
