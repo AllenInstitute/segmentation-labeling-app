@@ -4,6 +4,7 @@ from pathlib import Path
 from functools import partial
 import os
 import numpy as np
+import json
 
 from slapp.transforms import transform_pipeline
 
@@ -139,7 +140,7 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     # Assert that created manifests are correct
     expected_insert_statements = [
             transform_pipeline.insert_str_template.format(
-                manifest,
+                json.dumps(manifest),
                 os.environ['TRANSFORM_HASH'],
                 manifest['roi-id'])
             for manifest in expected_manifests]
