@@ -90,7 +90,7 @@ class DbConnection():
         return [dict(zip(columns, c)) for c in cursor.fetchall()]
 
     def insert(self, statement):
-        self.bulk_insert(self, [statement])
+        self.bulk_insert([statement])
 
     def bulk_insert(self, statements):
         """insert multiple statements with a single commit
