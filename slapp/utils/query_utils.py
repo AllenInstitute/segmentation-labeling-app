@@ -89,6 +89,9 @@ class DbConnection():
         columns = [d[0].decode("utf-8") for d in cursor.description]
         return [dict(zip(columns, c)) for c in cursor.fetchall()]
 
+    def insert(self, statement):
+        self.bulk_insert(self, [statement])
+
     def bulk_insert(self, statements):
         """insert multiple statements with a single commit
 
