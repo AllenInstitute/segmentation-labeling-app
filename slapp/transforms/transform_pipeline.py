@@ -140,6 +140,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
         query_string = ("SELECT * FROM segmentation_runs "
                         f"WHERE id={self.args['segmentation_run_id']}")
         seg_query = db_conn.query(query_string)[0]
+        print('')
+        print(seg_query['source_video_path'])
         downsampled_video = downsample_h5_video(
                 Path(seg_query['source_video_path']),
                 self.args['input_fps'],

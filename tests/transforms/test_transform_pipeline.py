@@ -46,7 +46,7 @@ def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
         "roi-id": roi_id,
         "source-ref": f"{save_path}/{out_dirname}/outline_{roi_id}.png",
         "roi-mask-source-ref": f"{save_path}/{out_dirname}/mask_{roi_id}.png",
-        "video-source-ref": f"{save_path}/{out_dirname}/video_{roi_id}.mp4",
+        "video-source-ref": f"{save_path}/{out_dirname}/video_{roi_id}.webm",
         "max-source-ref": f"{save_path}/{out_dirname}/max_{roi_id}.png",
         "avg-source-ref": f"{save_path}/{out_dirname}/avg_{roi_id}.png",
         "trace-source-ref": f"{save_path}/{out_dirname}/trace_{roi_id}.json"
