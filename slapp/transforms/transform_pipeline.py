@@ -9,7 +9,7 @@ import datetime
 import slapp.utils.query_utils as query_utils
 from slapp.rois import ROI
 from slapp.transforms.video_utils import (
-    downsample_h5_video, transform_to_mp4)
+    downsample_h5_video, transform_to_webm)
 from slapp.transforms.array_utils import (
         content_extents, downsample_array, normalize_array)
 
@@ -62,7 +62,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
     playback_factor = argschema.fields.Float(
         required=False,
         default=1.0,
-        description=("mp4 FPS and trace pointInterval will adjust by this "
+        description=("webm FPS and trace pointInterval will adjust by this "
                      "factor relative to real time."))
     downsampling_strategy = argschema.fields.Str(
         required=False,
@@ -83,7 +83,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
         default=0.999,
         description=("upper quantile threshold for avg projection "
                      "histogram adjustment"))
-    mp4_bitrate = argschema.fields.Str(
+    webm_bitrate = argschema.fields.Str(
         required=False,
         default="192k",
         description="passed as bitrate to imageio-ffmpeg.write_frames()")
@@ -174,7 +174,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             # mask and outline from ROI class
             mask_path = output_dir / f"mask_{roi.roi_id}.png"
             outline_path = output_dir / f"outline_{roi.roi_id}.png"
-            sub_video_path = output_dir / f"video_{roi.roi_id}.mp4"
+            sub_video_path = output_dir / f"video_{roi.roi_id}.webm"
             max_proj_path = output_dir / f"max_{roi.roi_id}.png"
             avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
             trace_path = output_dir / f"trace_{roi.roi_id}.json"
@@ -196,9 +196,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
             sub_video = np.pad(
                     downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
                     ((0, 0), *pads))
-            transform_to_mp4(
+            transform_to_webm(
                     sub_video, str(sub_video_path),
-                    playback_fps, self.args['mp4_bitrate'])
+                    playback_fps, self.args['webm_bitrate'])
 
             # sub-projections
             sub_max = np.pad(
