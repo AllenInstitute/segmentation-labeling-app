@@ -43,6 +43,14 @@
     position: relative;
     margin-bottom: 30;
   }
+  .enlarged {
+    position: relative;
+    transform: scale(2);
+    transition: transform 0.35s ease-in-out;
+    z-index: 100;
+    border: 5px solid rgba(235, 235, 235, 1.0);
+    border-radius: 5px;
+  }
   .image-label{
     width: 128;
     margin-bottom:10;
@@ -68,14 +76,6 @@
     background: #d3d3d3;
     flex:10;
     flex-basis:0%;
-  }
-  .image-container:hover * {
-    transform: scale(2);
-    transition: transform 0.35s ease-in-out;
-    position: relative;
-    z-index: 100;
-    border: 10px solid rgba(235, 235, 235, 1.0) !important;
-    border-radius: 10px;
   }
   #roi-mask-thumb {
     background-color: white;
@@ -639,4 +639,9 @@
   
   video.addEventListener("timeupdate", moveTraceLine);
 
+  document.querySelectorAll(".image-container canvas").forEach(function(elem) {
+    elem.addEventListener("click", function () {
+      elem.classList.toggle("enlarged");
+    });
+  });
   </script>
