@@ -7,7 +7,7 @@ class CredentialsException(Exception):
 
 
 label_defaults = {
-        "host": "aibsdc-dev-bd1",
+        "host": "aibsdc-dev-db1",
         "database": "ophys_segmentation_labeling",
         "port": 5432}
 
