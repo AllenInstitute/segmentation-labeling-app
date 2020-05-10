@@ -8,9 +8,9 @@ import numpy as np
 
 insert_statement_template = (
         "INSERT INTO experiment_selection "
-        "(base64_query_strings, slapp_commit_hash, "
-        "ophys_experiment_ids, sub_selected_ids, random_seed) "
-        "VALUES ({}, {}, {}, {}, {})")
+        "(base64_query_strings, slapp_commit_hash, ophys_experiment_ids, "
+        "sub_selected_ids, random_seed, comment_string) "
+        "VALUES ({}, {}, {}, {}, {}, {})")
 
 
 class DataSelectorSchema(argschema.ArgSchema):
@@ -30,6 +30,10 @@ class DataSelectorSchema(argschema.ArgSchema):
         required=False,
         default=42,
         description="random number generator seed")
+    comment_string = argschema.fields.Str(
+        required=False,
+        default="",
+        description="logged in postgres entry as comment_string")
 
     @mm.post_load
     def check_lengths(self, data, **kwargs):
@@ -67,7 +71,8 @@ class DataSelector(argschema.ArgSchemaParser):
             f"'{os.environ['TRANSFORM_HASH']}'",
             f"ARRAY{repr(experiment_ids)}",
             f"ARRAY{repr(sub_experiments)}",
-            f"{self.args['random_seed']}")
+            f"{self.args['random_seed']}",
+            f"'{self.args['comment_string']}'")
 
         label_dbconn.insert(insert_statement)
 
