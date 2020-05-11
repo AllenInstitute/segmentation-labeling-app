@@ -170,7 +170,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         playback_fps = self.args['output_fps'] * self.args['playback_factor']
 
         # experiment-level artifact
-        full_video_path = output_dir / f"full_video.mp4"
+        full_video_path = output_dir / "full_video.mp4"
         transform_to_mp4(
                 downsampled_video, str(full_video_path),
                 playback_fps, self.args['mp4_bitrate'])
