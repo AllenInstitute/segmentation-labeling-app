@@ -62,13 +62,17 @@ class DataSelector(argschema.ArgSchemaParser):
             b64_queries.append(
                 base64.b64encode(bytes(qstring, 'utf-8')).decode('utf-8'))
 
-        rng = np.random.default_rng(self.args['random_seed'])
-
         sub_experiments = []
         for iq, elist in enumerate(experiment_ids):
-            rng.shuffle(elist)
+            # NOTE: we want the order per-query to be reproducible
+            # order of queries should not be important
+            # so, reconstruct the rng for each query.
+            rng = np.random.default_rng(self.args['random_seed'])
             sub_experiments.extend(
-                elist[0:self.args['sub_selection_counts'][iq]])
+                    rng.choice(
+                        elist,
+                        size=self.args['sub_selection_counts'][iq],
+                        replace=False))
 
         self.logger.info(f"sub-selected ids {sub_experiments}")
 
