@@ -50,11 +50,15 @@ class DataSelector(argschema.ArgSchemaParser):
     default_schema = DataSelectorSchema
 
     def run(self, lims_dbconn, label_dbconn):
+        self.logger.name = type(self).__name__
+
         experiment_ids = []
         b64_queries = []
         for qstring in self.args['query_strings']:
             experiment_ids.append(
                     [i['exp_id'] for i in lims_dbconn.query(qstring)])
+            self.logger.info(
+                    f"{qstring}\n returned {len(experiment_ids[-1])} ids")
             b64_queries.append(
                 base64.b64encode(bytes(qstring, 'utf-8')).decode('utf-8'))
 
@@ -66,6 +70,8 @@ class DataSelector(argschema.ArgSchemaParser):
             sub_experiments.extend(
                 elist[0:self.args['sub_selection_counts'][iq]])
 
+        self.logger.info(f"sub-selected ids {sub_experiments}")
+
         insert_statement = insert_statement_template.format(
             f"ARRAY{repr(b64_queries)}",
             f"'{os.environ['TRANSFORM_HASH']}'",
@@ -75,6 +81,7 @@ class DataSelector(argschema.ArgSchemaParser):
             f"'{self.args['comment_string']}'")
 
         label_dbconn.insert(insert_statement)
+        self.logger.info("results added to postgres table")
 
 
 if __name__ == "__main__":  # pragma: no cover
