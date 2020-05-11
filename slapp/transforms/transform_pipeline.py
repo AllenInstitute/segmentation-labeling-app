@@ -181,6 +181,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             # mask and outline from ROI class
             mask_path = output_dir / f"mask_{roi.roi_id}.png"
             outline_path = output_dir / f"outline_{roi.roi_id}.png"
+            full_outline_path = output_dir / f"full_outline_{roi.roi_id}.png"
             sub_video_path = output_dir / f"video_{roi.roi_id}.mp4"
             max_proj_path = output_dir / f"max_{roi.roi_id}.png"
             avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
@@ -192,9 +193,14 @@ class TransformPipeline(argschema.ArgSchemaParser):
             outline = roi.generate_ROI_outline(
                 shape=self.args['cropped_shape'],
                 quantile=self.args['quantile'])
+            full_outline = roi.generate_ROI_outline(
+                shape=self.args['cropped_shape'],
+                quantile=self.args['quantile'],
+                full=True)
 
             imageio.imsave(mask_path, mask, transparency=0)
             imageio.imsave(outline_path, outline, transparency=0)
+            imageio.imsave(full_outline_path, full_outline, transparency=0)
 
             # video sub-frame
             inds, pads = content_extents(
@@ -242,6 +248,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['max-source-ref'] = str(max_proj_path)
             manifest['avg-source-ref'] = str(avg_proj_path)
             manifest['trace-source-ref'] = str(trace_path)
+            manifest['full-outline-source-ref'] = str(full_outline_path)
 
             insert_str = insert_str_template.format(
                     json.dumps(manifest),
