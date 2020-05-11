@@ -44,6 +44,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
                      "artifact_basedir/segmentation_run_id."))
     cropped_shape = argschema.fields.List(
         argschema.fields.Int,
+        cli_as_single_argument=True,
         required=True,
         default=[128, 128],
         description="[h, w] of bounding box around ROI images/videos")
@@ -168,6 +169,12 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
         playback_fps = self.args['output_fps'] * self.args['playback_factor']
 
+        # experiment-level artifact
+        full_video_path = output_dir / f"full_video.mp4"
+        transform_to_mp4(
+                downsampled_video, str(full_video_path),
+                playback_fps, self.args['mp4_bitrate'])
+
         # create the per-ROI artifacts
         insert_statements = []
         for roi in rois:
@@ -181,6 +188,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
             mask = roi.generate_ROI_mask(
                     shape=self.args['cropped_shape'])
+            mask = np.uint8(mask * 255 / mask.max())
             outline = roi.generate_ROI_outline(
                 shape=self.args['cropped_shape'],
                 quantile=self.args['quantile'])
@@ -229,6 +237,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['roi-id'] = roi.roi_id
             manifest['source-ref'] = str(outline_path)
             manifest['roi-mask-source-ref'] = str(mask_path)
+            manifest['full-video-source-ref'] = str(full_video_path)
             manifest['video-source-ref'] = str(sub_video_path)
             manifest['max-source-ref'] = str(max_proj_path)
             manifest['avg-source-ref'] = str(avg_proj_path)
