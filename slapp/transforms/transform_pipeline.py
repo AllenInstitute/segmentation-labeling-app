@@ -172,10 +172,10 @@ class TransformPipeline(argschema.ArgSchemaParser):
         playback_fps = self.args['output_fps'] * self.args['playback_factor']
 
         # experiment-level artifact
-        full_video_path = output_dir / "full_video.mp4"
-        transform_to_mp4(
+        full_video_path = output_dir / "full_video.webm"
+        transform_to_webm(
                 downsampled_video, str(full_video_path),
-                playback_fps, self.args['mp4_bitrate'])
+                playback_fps, self.args['webm_bitrate'])
 
         # create the per-ROI artifacts
         insert_statements = []
@@ -184,7 +184,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             mask_path = output_dir / f"mask_{roi.roi_id}.png"
             outline_path = output_dir / f"outline_{roi.roi_id}.png"
             full_outline_path = output_dir / f"full_outline_{roi.roi_id}.png"
-            sub_video_path = output_dir / f"video_{roi.roi_id}.mp4"
+            sub_video_path = output_dir / f"video_{roi.roi_id}.webm"
             max_proj_path = output_dir / f"max_{roi.roi_id}.png"
             avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
             trace_path = output_dir / f"trace_{roi.roi_id}.json"
