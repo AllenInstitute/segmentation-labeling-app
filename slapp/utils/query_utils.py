@@ -20,14 +20,20 @@ lims_defaults = {
 
 def get_db_credentials(
         env_prefix="LABELING_", host=None, database=None, port=None) -> dict:
-    """Get labeling DB credentials from environment variables.
-    keys are ['user', 'password', 'host', 'port', 'database']
+    """Get labeling DB credentials from environment variables and keyword
+    args. Environment variables must be in the format `{env_prefix}{key}`,
+    where `key` is one of the following (case-sensitive):
+    ['USER', 'PASSWORD', 'HOST', 'PORT', 'DATABASE'].
+    Examples: LABELING_USER, LABELING_PASSWORD.
+    Values for `user` and `password` must be environment variables.
+    Values for `host`, `port`, and `database` can be either environment
+    variables of keyword arguments, with environment variables taking
+    precedence.
 
     Parameters
     ----------
     env_prefix : str
         expected environment variable prefix for credential keys.
-        expected ENV variables are <prefix><KEY> where <KEY> is key.upper()
     host : str
         default host value, if not found in os.environ
     database : str
