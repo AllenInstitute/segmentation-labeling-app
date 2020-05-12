@@ -46,11 +46,6 @@
     width: 128;
     font-size: smaller;
   }
-  .toggle-button{
-    margin-bottom: 20;
-    font-size: small;
-    width: 150;
-  }
   .progress-bar {
     position: relative;
     display:flex;
@@ -76,12 +71,6 @@
     z-index: 100;
     border: 5px solid rgba(235, 235, 235, 1.0);
     border-radius: 5px;
-  }
-
-  .speed {
-    font-size: small;
-    position: relative;
-    top: -7;
   }
   .note {
     font-size: x-small;
@@ -109,7 +98,80 @@
   .invisible {
     display: none;
   }
+  .colorblind {
+    filter: invert(87%) sepia(27%) saturate(6091%) hue-rotate(353deg) brightness(105%) contrast(102%);
+  }
+  .default-colors {
+    filter: invert(10%) sepia(93%) saturate(7292%) hue-rotate(11deg) brightness(108%) contrast(118%);
+  }
+  #fade {
+    display: none;
+    position: fixed;
+    top: 0%;
+    left: 0%;
+    width: 100%;
+    height: 100%;
+    background-color: black;
+    z-index: 101;
+    -moz-opacity: 0.8;
+    opacity: .80;
+    filter: alpha(opacity=80);
+  }
+  #light {
+    display: none;
+    position: absolute;
+    top: 5%;
+    left: 50%;
+    max-width: 800px;
+    height: 700px;
+    margin-left: -300px;
+    /* margin-top: -180px; */
+    border: 2px solid #FFF;
+    background: #FFF;
+    z-index: 102;
+    overflow: visible;
+  }
+  #fade:hover ~ #boxclose {
+    display:none;
+  }
+  #video-overlay {
+    position: absolute;
+    top: 94;
+    left: 0;
+    width: 512;
+    height: 512;
+    z-index: 1000;
+  }
+  #boxclose {
+    float: right;
+    cursor: pointer;
+    color: #fff;
+    border: 1px solid #AEAEAE;
+    border-radius: 3px;
+    background: #222222;
+    font-size: 31px;
+    font-weight: bold;
+    line-height: 0px;
+    padding: 11px 3px;
+    position: absolute;
+    right: 2px;
+    top: 2px;
+    z-index: 102;
+    opacity: 0.9;
+  }
 </style>
+
+<!-- Full FOV video lightbox (hidden by default)-->
+<div id="light">
+  <a id="boxclose" onclick="closeFullVideo();"><i class='material-icons'>close</i></a>
+  <video id="full-fov-video" width="512" height="700" controls preload="metadata">
+    <source src="{{ task.input.full-video-source-ref | grant_read_access }}" type="video/mp4">
+      Browser does not support video
+  </video>
+  <div id="video-overlay">
+    <img id="full-fov-roi" class="default-colors" src="{{ task.input.full-outline-source-ref | grant_read_access }}"/>
+  </div>
+</div>
 
 <crowd-form>
   <crowd-classifier
@@ -128,7 +190,12 @@
 
         <div class="row no-gutters">
           <div class="col-sm text-center">
-            <div class="image-label">2p Recording</div>
+            <div class="image-label">2p Video
+              <span>
+                <a href="#" onclick="openFullVideo();"> (Full Size)</a>
+              </span>
+            </div>
+            <div id="fade" onClick="closeFullVideo();"></div>
             <div class="image-container">
               <canvas id="roi-vid" width="128" height="128"></canvas>
               <span class="video-controls">
@@ -519,11 +586,16 @@
     // Toggle whether colorblind mode is on
     // Colorblind mode makes the ROIs yellow for better contrast
     let colorButton = document.getElementById("toggle-colorblind");
+    let fullFovRoi = document.getElementById("full-fov-roi")
     if (colorblindMode) {
       colorblindMode = false;
       colorButton.innerHTML = "Colorblind Mode";
+      fullFovRoi.classList.remove("colorblind")
+      fullFovRoi.classList.add("default-colors")
     } else {
       colorblindMode = true;
+      fullFovRoi.classList.remove("default-colors")
+      fullFovRoi.classList.add("colorblind")
       colorButton.innerHTML = "Default Colors"
     }
     redrawCanvases();
@@ -645,4 +717,18 @@
     }
   });
 
+  function openFullVideo() {
+    var lightBoxVideo = document.getElementById("full-fov-video");
+    window.scrollTo(0, 0);
+    document.getElementById('light').style.display = 'block';
+    document.getElementById('fade').style.display = 'block';
+    lightBoxVideo.play();
+}
+
+function closeFullVideo() {
+  var lightBoxVideo = document.getElementById("full-fov-video");
+  document.getElementById('light').style.display = 'none';
+  document.getElementById('fade').style.display = 'none';
+  lightBoxVideo.pause();
+}
   </script>
