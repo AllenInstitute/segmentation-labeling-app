@@ -3,7 +3,10 @@
 <script src="https://code.highcharts.com/stock/highstock.js"></script>
 <script src="https://code.highcharts.com/stock/modules/data.js"></script>
 <script src="https://code.highcharts.com/modules/boost.js"></script>
-<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
 
 <style>
 	body {
@@ -16,44 +19,37 @@
   label {
     font-size: smaller;
   }
-  .range-output {
+  .smaller-font {
     font-size: smaller;
   }
-  .slidecontainer {
-    width: 300;
+  .slide-container {
+    margin-left: 10;
+    margin-right: 10;
+    width: 180;
+    margin-top: 10;
+    margin-bottom: 10;
   }
   .reset {
     font-size: smaller;
     position: relative;
     left: 10;
   }
-  #play-pause {
-    position: relative;
-    top: 0;
-    left: -10;
-    height: 10;
-    border: none;
-    background-color: transparent;
-    outline: none;
-    cursor: pointer;
-  }
   .image-container {
-    height: 128;
-    width: 128;
+    height: 128px;
+    width: 128px;
     position: relative;
     margin-bottom: 30;
+    margin-left: 5;
+    margin-right: 5;
   }
   .image-label{
     width: 128;
-    margin-bottom:10;
     font-size: smaller;
   }
   .toggle-button{
     margin-bottom: 20;
     font-size: small;
-  }
-  .options {
-    font-size: x-small;
+    width: 150;
   }
   .progress-bar {
     position: relative;
@@ -68,7 +64,8 @@
   }
   #progress-fill {
     width:0%;
-    background: #d3d3d3;
+    background: #ff0000;
+    /* background: #d3d3d3; */
     flex:10;
     flex-basis:0%;
   }
@@ -80,16 +77,37 @@
     border: 5px solid rgba(235, 235, 235, 1.0);
     border-radius: 5px;
   }
+
   .speed {
-    font-size: x-small;
+    font-size: small;
     position: relative;
     top: -7;
   }
   .note {
-    font-size: small;
+    font-size: x-small;
     position: relative;
+    width: 128px;
     top: -25;
     font-style: italic;
+  }
+  #hc-container {
+    min-width: 310px;
+    height: 450px;
+    max-width: 550px;
+    padding-top: 30px;
+    padding-bottom: 100px;
+    margin: 0 auto;
+  }
+  #classification-target-container {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  #chart-controls {
+    position: relative;
+    top: 20px;
+  }
+  .invisible {
+    display: none;
   }
 </style>
 
@@ -100,92 +118,95 @@
     header="Is the region of interest a cell or not a cell?"
   >
     <classification-target>
-      <div class="my-container">
-        <div class="row">
-          <div class="col-sm">
-            <button class="toggle-button outline" id="toggle-mask" type="button" onclick="toggleMaskOutline()">Show Mask Overlay</button>
-          </div>
+      <div class="btn-group d-flex rounded border" role="group" style="margin-bottom:20;">
+        <button class="btn btn-light w-100" id="toggle-mask" type="button" onclick="toggleMaskOutline()">Show Mask Overlay</button>
+        <button class="btn btn-light w-100" id="toggle-roi" type="button">Hide ROI</button>
+        <button class="btn btn-light w-100" id="toggle-colorblind" type="button" onclick="toggleColorblind()">Colorblind Mode</button>
+     </div>
+
+      <div class="classification-target-container">
+
+        <div class="row no-gutters">
           <div class="col-sm text-center">
-            <button class="toggle-button is-visible" id="toggle-roi" type="button">Hide ROI</button>
-          </div>
-          <div class="col-sm text-right">
-            <button class="toggle-button default-colors" id="toggle-colorblind" type="button" onclick="toggleColorblind()">Colorblind Mode</button>
-          </div>
-        </div>
-        <div class="row no-gutters justify-content-md-center">
-          <div class="col-sm">
-            <span class="image-label">2p Recording</span>
-            <div class="container">
-              <span class="image-container">
-                <canvas id="roi-vid" width="128" height="128"></canvas>
-              </span>
+            <div class="image-label">2p Recording</div>
+            <div class="image-container">
+              <canvas id="roi-vid" width="128" height="128"></canvas>
               <span class="video-controls">
                 <span class="progress-bar">
                   <span id="progress-fill"></span>
-                </span>
-                <span>
-                  <button id="play-pause" type="button"><i class="material-icons">play_circle_outline</i></button>
-                  <label class=speed for="speed">Speed:</label>
-                  <select id="speed-button" class="speed" onchange="changeVideoSpeed()">
-                    <option value="1">1x</option>
-                    <option value="2">2x</option>
-                    <option value="4">3x</option>
-                    <option value="8">8x</option>
-                    <option value="16">16x</option>
-                  </select>
-                </span>
               </span>
             </div>
           </div>
-          <div class="col-sm">
-            <span class="image-label">Average Projection</span>
+
+          <div class="col-sm text-center">
+            <div class="image-label">Avg. Projection</div>
             <div class="image-container">
               <canvas id="avg-projection" width="128" height="128"></canvas>
             </div>
           </div>
-          <div class="col-sm">
-            <span class="image-label">Max Projection</span>
+
+          <div class="col-sm text-center">
+            <div class="image-label">Max Projection</div>
             <div class="image-container">
               <canvas id="max-projection" width="128" height="128"></canvas>
             </div>
           </div>
-          <div class="col-sm">
-            <span class="image-label">ROI Mask</span>
+
+          <div class="col-sm text-center">
+            <div class="image-label">ROI Mask</div>
             <div class="image-container"> 
                 <canvas id="roi-thumb" width="128" height="128"></canvas>
             </div>
-            <span class="note">(Lighter colors indicate higher weights)</span>
           </div>
         </div>
-        <div class="row">
-          <div class="col">
-            <span class="slidecontainer">
+
+        <div>
+          <button id="toggle-adjustments" class="btn btn-sm btn-light border" type="button" style="position: relative; top: 1px;">Hide Image Adjustment Controls</button>
+          <div class="d-flex justify-content-around flex-wrap border rounded" id="bc-controls">
+            <span class="slide-container">
               <span>
-                <input type="range" min="0" max="200" value="100" class="slider" id="brightness-slider" name="brightness">
-                <label for="brightness">Video Brightness: </label>
-                <span class="range-output" id="brightness-output">100%</span>
+                <input type="range" min="0" max="200" value="100" class="form-control-range slider" id="brightness-slider" name="brightness">
+                <label for="brightness">Brightness: </label>
+                <span class="smaller-font" id="brightness-output">100%</span>
               </span>
-              <button class="reset" id="reset-brightness" type="button" onclick="setValueDefault('brightness-slider', 100)">Reset</button>
+              <button class="reset btn btn-sm btn-light border" id="reset-brightness" type="button" style="display: inline;" onclick="setValueDefault('brightness-slider', 100)">Reset</button>
+            </span>
+
+            <span class="slide-container">
+              <span>
+                <input type="range" min="0" max="200" value="100" class="form-control-range slider" id="contrast-slider" name="contrast">
+                <label for="brightness">Contrast: </label>
+                <span class="smaller-font" id="contrast-output">100%</span>
+              </span>
+              <button class="reset btn btn-sm btn-light border" id="reset-brightness" type="button" style="display: inline;" onclick="setValueDefault('contrast-slider', 100)">Reset</button>
             </span>
           </div>
         </div>
-        <div class="row">
-          <div class="col">
-            <span class="slidecontainer">
-              <span>
-                <input type="range" min="0" max="200" value="100" class="slider" id="contrast-slider" name="contrast">
-                <label for="contrast">Video Contrast: </label>
-                <span class="range-output" id="contrast-output">100%</span>
-              </span>
-              <button class="reset" id="reset-contrast" type="button" onclick="setValueDefault('contrast-slider', 100)">Reset</button>
-            </span>
-          </div>
-        </div>
-        <div class="row justify-content-around">
-          <div class="col" id="hc-container" style="max-width:580px; height:300px;"></div>
+
+        <div>
+          <span id="chart-controls">
+            <div class="btn-group btn-group-sm rounded border" role="group">
+              <button id="play-pause" class="btn btn-light border-right" type="button" onclick="togglePlayPause()"><i class="material-icons">play_circle_outline</i></button>
+              <button class="btn btn-light border-left" id="play-selection" type="button" onclick="playSelection()">Play Selection</button>
+              <button class="btn btn-light border-right" id="play-selection" type="button" onclick="playAll()">Play All</button>
+              <div class="btn-group btn-group-sm" role="group">
+                <button id="speedDrop" type="button" class="btn btn-light dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                  <i class="material-icons" style="font-size:15px; vertical-align:middle;">fast_forward</i>
+                  <span> 1x</span>
+                </button>
+                <div class="dropdown-menu" aria-labelledby="speedDrop">
+                  <a class="dropdown-item" href="javascript:changeVideoSpeed(1);">1x</a>
+                  <a class="dropdown-item" href="javascript:changeVideoSpeed(2);">2x</a>
+                  <a class="dropdown-item" href="javascript:changeVideoSpeed(3);">3x</a>
+                  <a class="dropdown-item" href="javascript:changeVideoSpeed(8);">8x</a>
+                  <a class="dropdown-item" href="javascript:changeVideoSpeed(8);">16x</a>
+                </div>
+              </div>
+            </div>
+          </span>
+          <div id="hc-container"></div>
         </div>
       </div>
-      
     </classification-target>
     
     <full-instructions header="Cell Detection Instructions">
@@ -217,22 +238,7 @@
           zoomType: 'x',
           events: {
             load: function() {
-              var ch = this
-              
-              playSelection = ch.renderer.button('Play Selection', null, null, function(){
-                var extremes = ch.xAxis[0].getExtremes();
-                playVideoSelection(video, extremes.min, extremes.max);
-              }, {
-                  zIndex: 20
-              }).attr({
-                id: 'playSelection',
-                align: 'left',
-                title: 'Play video selection'
-              }).add().align({
-                align: 'left',
-                x: 15,
-                y: 5
-              }, false, null);
+              var ch = this;
 
               zoomButton = ch.renderer.button('Reset zoom', null, null, function(){
                 ch.xAxis[0].setExtremes(null, null);
@@ -261,11 +267,12 @@
         caption: {
           text: "Click a point on the ROI trace to jump to that point in the video. "+
                 "Select points by dragging on the chart, or by adjusting the navigation bar. "+
-                "Play movie for the selected timestamps by clicking the 'Play Selection' button."
-          },
-
+                "Play movie for the selected timestamps by clicking the 'Play Selection' button.",
+          floating: false,
+          verticalAlign: "bottom"
+      },
         title: {
-            text: '2p Trace',
+            text: '2-photon Fluorescence Trace',
             style: {
               fontSize: "18px"
             }
@@ -291,7 +298,8 @@
             labels: {
               enabled: false
             }
-          }
+          },
+          adaptToUpdatedData: false
         },
 
         series: [{
@@ -308,7 +316,7 @@
                 video.currentTime = event.point.x;
               },
             },
-        }]
+        }],
       });
     });
 
@@ -434,15 +442,12 @@
   }
 
   function setValueDefault(id, value) {
-    console.log(id);
-    console.log(value);
     // Manually trigger input event to update associated label
     let elem = document.getElementById(id),
       event = new Event('input', {
         bubbles: true,
         cancelable: true,
       });
-    console.log(elem);
     elem.value = value;
     elem.dispatchEvent(event)
   }
@@ -579,8 +584,16 @@
     redrawCanvases();
   }
 
-  function playVideoSelection(video, startTime, endTime) {
-    // Play the video from startTime to endTime
+  function playAll() {
+    chart.xAxis[0].setExtremes(null, null);
+    playSelection();
+  }
+
+  function playSelection() {
+    // Play the video from start to end based on chart extremes
+    let extremes = chart.xAxis[0].getExtremes(),
+      startTime = extremes.min,
+      endTime = extremes.max;
     video.removeEventListener("timeupdate", pauseAtTime);
     let isPlaying = video.currentTime > 0 && !video.paused && !video.ended;
     if (endTime <= startTime) throw "Selection end must be after start.";
@@ -599,8 +612,7 @@
     video.addEventListener("timeupdate", pauseAtTime);
   };
 
-  function changeVideoSpeed(selection) {
-    let speed = parseInt(document.getElementById("speed-button").value);
+  function changeVideoSpeed(speed) {
     video.playbackRate = speed;
   }
 
@@ -614,11 +626,23 @@
   
   video.addEventListener("timeupdate", moveTraceLine);
 
-  document.querySelectorAll(".image-container canvas").forEach(function(elem) {
-    elem.addEventListener("click", function () {
-      elem.classList.toggle("enlarged");
+  $(".image-container canvas").click(function() {
+      $(this).toggleClass("enlarged");
     });
+
+  $(".dropdown-menu a").click(function() {
+    $(this).parents().find(".dropdown-toggle").html(
+      ('<i class="material-icons" style="font-size:15px; vertical-align:middle;">fast_forward</i><span> '
+        +$(this).text()+'</span>'))});
+
+  $("#toggle-adjustments").on("click", function () {
+    $(".slide-container").toggleClass("invisible");
+    if ($(this).html() == "Hide Image Adjustment Controls") {
+      $(this).html("Show Image Adjustment Controls");
+    }
+    else {
+      $(this).html("Hide Image Adjustment Controls");
+    }
   });
-      
 
   </script>
