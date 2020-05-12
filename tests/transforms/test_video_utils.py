@@ -39,7 +39,9 @@ def test_video_downsample(
     assert np.array_equal(downsampled_video, expected)
 
 
-def test_mp4_conversion(tmp_path):
+@pytest.mark.parametrize("video_size", [((16, 32)),
+                                        ((16, 16))])
+def test_webm_conversion(video_size, tmp_path):
     # make the test video a size of at least 16x16
     # otherwise, need to mess with macro_block_size arg
     nframes_written = 25
@@ -47,21 +49,24 @@ def test_mp4_conversion(tmp_path):
     fps = 30
     rng = np.random.default_rng(0)
     video = np.array(
-            [rng.integers(0, 256, size=(16, 16), dtype='uint8')
+            [rng.integers(0, 256, size=video_size, dtype='uint8')
              for i in range(nframes_written)])
 
-    transformations.transform_to_mp4(video=video,
-                                     output_path=output_path.as_posix(),
-                                     fps=fps),
+    transformations.transform_to_webm(video=video,
+                                      output_path=output_path.as_posix(),
+                                      fps=fps),
 
     reader = imageio.get_reader(output_path.as_posix(), mode='I', fps=fps,
-                                pixelformat="gray")
+                                pixelformat="yuv420p")
     meta = reader.get_meta_data()
     nframes_read = int(np.round(meta['duration'] * meta['fps']))
 
     assert nframes_read == nframes_written
 
-    read_video = np.zeros((nframes_read, *meta['size']), dtype='uint8')
+    # size is reversed coming from ffmpeg they use (width x height)
+    # not (row x col)
+    read_video = np.zeros((nframes_read, meta['size'][1], meta['size'][0]),
+                          dtype='uint8')
     for i in range(nframes_read):
         read_video[i] = reader.get_data(i)[:, :, 0]
     reader.close()

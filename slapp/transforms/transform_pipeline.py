@@ -9,7 +9,7 @@ import datetime
 import slapp.utils.query_utils as query_utils
 from slapp.rois import ROI
 from slapp.transforms.video_utils import (
-    downsample_h5_video, transform_to_mp4)
+    downsample_h5_video, transform_to_webm)
 from slapp.transforms.array_utils import (
         content_extents, downsample_array, normalize_array)
 
@@ -63,7 +63,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
     playback_factor = argschema.fields.Float(
         required=False,
         default=1.0,
-        description=("mp4 FPS and trace pointInterval will adjust by this "
+        description=("webm FPS and trace pointInterval will adjust by this "
                      "factor relative to real time."))
     downsampling_strategy = argschema.fields.Str(
         required=False,
@@ -84,7 +84,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
         default=0.999,
         description=("upper quantile threshold for avg projection "
                      "histogram adjustment"))
-    mp4_bitrate = argschema.fields.Str(
+    webm_bitrate = argschema.fields.Str(
         required=False,
         default="192k",
         description="passed as bitrate to imageio-ffmpeg.write_frames()")
@@ -103,7 +103,9 @@ class TransformPipelineSchema(argschema.ArgSchema):
                         "include args ophys_experiment_id and "
                         "ophys_segmentation_commit_hash")
 
-            db_credentials = query_utils.get_labeling_db_credentials()
+            db_credentials = query_utils.get_db_credentials(
+                    env_prefix="LABELING_",
+                    **query_utils.label_defaults)
             db_connection = query_utils.DbConnection(**db_credentials)
             query_string = (
                 "SELECT id FROM segmentation_runs WHERE "
@@ -210,9 +212,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
             sub_video = np.pad(
                     downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
                     ((0, 0), *pads))
-            transform_to_mp4(
+            transform_to_webm(
                     sub_video, str(sub_video_path),
-                    playback_fps, self.args['mp4_bitrate'])
+                    playback_fps, self.args['webm_bitrate'])
 
             # sub-projections
             sub_max = np.pad(
@@ -261,7 +263,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    db_credentials = query_utils.get_labeling_db_credentials()
+    db_credentials = query_utils.get_db_credentials(
+            env_prefix="LABELING_",
+            **query_utils.label_defaults)
     db_connection = query_utils.DbConnection(**db_credentials)
 
     pipeline = TransformPipeline()
