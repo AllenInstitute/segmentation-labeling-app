@@ -2,12 +2,44 @@ import os
 import pg8000
 
 
-class LabelingEnvException(Exception):
+class CredentialsException(Exception):
     pass
 
 
-def get_labeling_db_credentials() -> dict:
-    """Get labeling DB credentials from environment variables.
+label_defaults = {
+        "host": "aibsdc-dev-db1",
+        "database": "ophys_segmentation_labeling",
+        "port": 5432}
+
+
+lims_defaults = {
+        "host": "limsdb2",
+        "database": "lims2",
+        "port": 5432}
+
+
+def get_db_credentials(
+        env_prefix="LABELING_", host=None, database=None, port=None) -> dict:
+    """Get labeling DB credentials from environment variables and keyword
+    args. Environment variables must be in the format `{env_prefix}{key}`,
+    where `key` is one of the following (case-sensitive):
+    ['USER', 'PASSWORD', 'HOST', 'PORT', 'DATABASE'].
+    Examples: LABELING_USER, LABELING_PASSWORD.
+    Values for `user` and `password` must be environment variables.
+    Values for `host`, `port`, and `database` can be either environment
+    variables of keyword arguments, with environment variables taking
+    precedence.
+
+    Parameters
+    ----------
+    env_prefix : str
+        expected environment variable prefix for credential keys.
+    host : str
+        default host value, if not found in os.environ
+    database : str
+        default database value, if not found in os.environ
+    port : int
+        default port value, if not found in os.environ
 
     Returns
     -------
@@ -17,22 +49,27 @@ def get_labeling_db_credentials() -> dict:
 
     Raises
     ------
-    LabelingEnvException
-        Raised if LABELING_USER/LABELING_PASSWORD are not set.
+    CredentialsException
+        Raised if user and password are not set as ENV variables
     """
-    try:
-        user = os.environ["LABELING_USER"]
-        password = os.environ["LABELING_PASSWORD"]
-    except KeyError:
-        raise LabelingEnvException(
-                "both env variables LABELING_USER and "
-                "LABELING_PASSWORD must be set")
-    host = os.environ.get('LABELING_HOST', "aibsdc-dev-db1")
-    database = os.environ.get(
-            'LABELING_DATABASE', "ophys_segmentation_labeling")
-    port = os.environ.get('LABELING_PORT', 5432)
-    db_credentials = {'user': user, 'host': host, 'database': database,
-                      'password': password, 'port': port}
+
+    db_credentials = {}
+    for key in ['user', 'password']:
+        env_key = env_prefix + key.upper()
+        try:
+            db_credentials[key] = os.environ[env_key]
+        except KeyError:
+            raise CredentialsException(f"ENV variable {env_key} must be set")
+
+    defaults = {'host': host, 'port': port, 'database': database}
+
+    for key in ['host', 'port', 'database']:
+        env_key = env_prefix + key.upper()
+        db_credentials[key] = os.environ.get(env_key, defaults[key])
+        if db_credentials[key] is None:
+            raise CredentialsException(
+                    "no ENV variable found and no default provided "
+                    f"for {env_key}")
 
     return db_credentials
 
@@ -57,6 +94,9 @@ class DbConnection():
         cursor.execute(query)
         columns = [d[0].decode("utf-8") for d in cursor.description]
         return [dict(zip(columns, c)) for c in cursor.fetchall()]
+
+    def insert(self, statement):
+        self.bulk_insert([statement])
 
     def bulk_insert(self, statements):
         """insert multiple statements with a single commit

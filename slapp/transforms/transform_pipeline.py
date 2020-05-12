@@ -102,7 +102,9 @@ class TransformPipelineSchema(argschema.ArgSchema):
                         "include args ophys_experiment_id and "
                         "ophys_segmentation_commit_hash")
 
-            db_credentials = query_utils.get_labeling_db_credentials()
+            db_credentials = query_utils.get_db_credentials(
+                    env_prefix="LABELING_",
+                    **query_utils.label_defaults)
             db_connection = query_utils.DbConnection(**db_credentials)
             query_string = (
                 "SELECT id FROM segmentation_runs WHERE "
@@ -245,7 +247,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    db_credentials = query_utils.get_labeling_db_credentials()
+    db_credentials = query_utils.get_db_credentials(
+            env_prefix="LABELING_",
+            **query_utils.label_defaults)
     db_connection = query_utils.DbConnection(**db_credentials)
 
     pipeline = TransformPipeline()
