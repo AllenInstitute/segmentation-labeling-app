@@ -46,7 +46,7 @@ def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
         "roi-id": roi_id,
         "source-ref": f"{save_path}/{out_dirname}/outline_{roi_id}.png",
         "roi-mask-source-ref": f"{save_path}/{out_dirname}/mask_{roi_id}.png",
-        "video-source-ref": f"{save_path}/{out_dirname}/video_{roi_id}.mp4",
+        "video-source-ref": f"{save_path}/{out_dirname}/video_{roi_id}.webm",
         "max-source-ref": f"{save_path}/{out_dirname}/max_{roi_id}.png",
         "avg-source-ref": f"{save_path}/{out_dirname}/avg_{roi_id}.png",
         "trace-source-ref": f"{save_path}/{out_dirname}/trace_{roi_id}.json"
@@ -93,7 +93,7 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     mock_normalize = MagicMock(side_effect=normalize_side_effect)
     mock_imageio = MagicMock()
     mock_content_extents = MagicMock(return_value=([0, 0, 2, 2], [1, 1, 1, 1]))
-    mock_transform_to_mp4 = MagicMock()
+    mock_transform_to_webm = MagicMock()
     mock_np = MagicMock()
     mock_np.quantile = MagicMock(return_value=(0, 1))
 
@@ -103,7 +103,7 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     mpatcher(name="imageio", value=mock_imageio)
     mpatcher(name="content_extents", value=mock_content_extents)
     mpatcher(name="normalize_array", value=mock_normalize)
-    mpatcher(name="transform_to_mp4", value=mock_transform_to_mp4)
+    mpatcher(name="transform_to_webm", value=mock_transform_to_webm)
     mpatcher(name="np", value=mock_np)
 
     os.environ['TRANSFORM_HASH'] = 'dummy_hash'
