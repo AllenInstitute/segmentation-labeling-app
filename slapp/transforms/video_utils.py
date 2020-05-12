@@ -46,10 +46,10 @@ def downsample_h5_video(
     return video_out
 
 
-def transform_to_mp4(video: np.ndarray, output_path: str,
-                     fps: float, bitrate: str = "192k"):
+def transform_to_webm(video: np.ndarray, output_path: str,
+                      fps: float, bitrate: str = "192k"):
     """
-    Function to transform 2p gray scale video into a mp4
+    Function to transform 2p gray scale video into a webm
     video using imageio_ffmpeg.
     Args:
         video: Video to be transformed with shape (time, row, col)
@@ -59,10 +59,16 @@ def transform_to_mp4(video: np.ndarray, output_path: str,
     Returns:
 
     """
+
+    # ffmpeg expects the video shape in width, height not row, col
+    # have to reverse shape when inputting
+    # gray8 is uint8 format
+
     writer = mpg.write_frames(output_path,
-                              video[0].shape,
-                              pix_fmt_in="gray",
-                              pix_fmt_out="gray",
+                              (video[0].shape[1], video[0].shape[0]),
+                              pix_fmt_in="gray8",
+                              pix_fmt_out="yuv420p",
+                              codec="libvpx-vp9",
                               fps=fps,
                               bitrate=bitrate)
     writer.send(None)
