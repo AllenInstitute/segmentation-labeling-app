@@ -4,6 +4,9 @@ import h5py
 import numpy as np
 import imageio_ffmpeg as mpg
 from slapp.transforms.array_utils import downsample_array
+import multiprocessing
+import tempfile
+import subprocess
 
 
 def downsample_h5_video(
@@ -46,6 +49,23 @@ def downsample_h5_video(
     return video_out
 
 
+def transform_job(fargs):
+    video, output_path, fps, bitrate = fargs
+
+    writer = mpg.write_frames(output_path,
+                              video[0].shape[::-1],
+                              pix_fmt_in="gray8",
+                              pix_fmt_out="yuv420p",
+                              codec="libvpx-vp9",
+                              fps=fps,
+                              bitrate=bitrate)
+    writer.send(None)
+    for frame in video:
+        writer.send(frame)
+    writer.close()
+    return output_path
+
+
 def transform_to_webm(video: np.ndarray, output_path: str,
                       fps: float, bitrate: str = "192k"):
     """
@@ -64,15 +84,25 @@ def transform_to_webm(video: np.ndarray, output_path: str,
     # have to reverse shape when inputting
     # gray8 is uint8 format
 
-    writer = mpg.write_frames(output_path,
-                              video[0].shape[::-1],
-                              pix_fmt_in="gray8",
-                              pix_fmt_out="yuv420p",
-                              codec="libvpx-vp9",
-                              fps=fps,
-                              bitrate=bitrate,
-                              output_params=['-row-mt', '1'])
-    writer.send(None)
-    for frame in video:
-        writer.send(frame)
-    writer.close()
+    ncpu = multiprocessing.cpu_count()
+    split_video = np.array_split(video, ncpu)
+    outputs = [tempfile.NamedTemporaryFile(suffix='.webm')
+               for i in range(ncpu)]
+    args = []
+    for vid, outpath in zip(split_video, outputs):
+        args.append([vid, outpath.name, fps, bitrate])
+
+    with multiprocessing.Pool(ncpu) as pool:
+        results = pool.map(transform_job, args)
+
+    listfile = tempfile.NamedTemporaryFile(suffix=".txt")
+    with open(listfile.name, 'w') as fp:
+        for fname in results:
+            fp.write(f"file '{fname}'\n")
+
+    sub_args = ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i',
+                listfile.name, '-c', 'copy', output_path]
+    subprocess.run(sub_args)
+
+    listfile.close()
+    [o.close() for o in outputs]
