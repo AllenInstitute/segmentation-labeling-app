@@ -44,6 +44,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
                      "artifact_basedir/segmentation_run_id."))
     cropped_shape = argschema.fields.List(
         argschema.fields.Int,
+        cli_as_single_argument=True,
         required=True,
         default=[128, 128],
         description="[h, w] of bounding box around ROI images/videos")
@@ -170,12 +171,19 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
         playback_fps = self.args['output_fps'] * self.args['playback_factor']
 
+        # experiment-level artifact
+        full_video_path = output_dir / "full_video.webm"
+        transform_to_webm(
+                downsampled_video, str(full_video_path),
+                playback_fps, self.args['webm_bitrate'])
+
         # create the per-ROI artifacts
         insert_statements = []
         for roi in rois:
             # mask and outline from ROI class
             mask_path = output_dir / f"mask_{roi.roi_id}.png"
             outline_path = output_dir / f"outline_{roi.roi_id}.png"
+            full_outline_path = output_dir / f"full_outline_{roi.roi_id}.png"
             sub_video_path = output_dir / f"video_{roi.roi_id}.webm"
             max_proj_path = output_dir / f"max_{roi.roi_id}.png"
             avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
@@ -183,12 +191,18 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
             mask = roi.generate_ROI_mask(
                     shape=self.args['cropped_shape'])
+            mask = np.uint8(mask * 255 / mask.max())
             outline = roi.generate_ROI_outline(
                 shape=self.args['cropped_shape'],
                 quantile=self.args['quantile'])
+            full_outline = roi.generate_ROI_outline(
+                shape=self.args['cropped_shape'],
+                quantile=self.args['quantile'],
+                full=True)
 
             imageio.imsave(mask_path, mask, transparency=0)
             imageio.imsave(outline_path, outline, transparency=0)
+            imageio.imsave(full_outline_path, full_outline, transparency=0)
 
             # video sub-frame
             inds, pads = content_extents(
@@ -231,10 +245,12 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['roi-id'] = roi.roi_id
             manifest['source-ref'] = str(outline_path)
             manifest['roi-mask-source-ref'] = str(mask_path)
+            manifest['full-video-source-ref'] = str(full_video_path)
             manifest['video-source-ref'] = str(sub_video_path)
             manifest['max-source-ref'] = str(max_proj_path)
             manifest['avg-source-ref'] = str(avg_proj_path)
             manifest['trace-source-ref'] = str(trace_path)
+            manifest['full-outline-source-ref'] = str(full_outline_path)
 
             insert_str = insert_str_template.format(
                     json.dumps(manifest),

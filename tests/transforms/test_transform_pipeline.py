@@ -46,10 +46,13 @@ def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
         "roi-id": roi_id,
         "source-ref": f"{save_path}/{out_dirname}/outline_{roi_id}.png",
         "roi-mask-source-ref": f"{save_path}/{out_dirname}/mask_{roi_id}.png",
+        "full-video-source-ref": f"{save_path}/{out_dirname}/full_video.webm",
         "video-source-ref": f"{save_path}/{out_dirname}/video_{roi_id}.webm",
         "max-source-ref": f"{save_path}/{out_dirname}/max_{roi_id}.png",
         "avg-source-ref": f"{save_path}/{out_dirname}/avg_{roi_id}.png",
-        "trace-source-ref": f"{save_path}/{out_dirname}/trace_{roi_id}.json"
+        "trace-source-ref": f"{save_path}/{out_dirname}/trace_{roi_id}.json",
+        "full-outline-source-ref": f"{save_path}/{out_dirname}/"
+                                   f"full_outline_{roi_id}.png"
     }
     return expected_manifest
 
@@ -131,10 +134,13 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
                          transparency=0)
         outline_save = call(Path(manifest['source-ref']), ANY,
                             transparency=0)
+        full_outline_save = call(
+                Path(manifest['full-outline-source-ref']), ANY, transparency=0)
         max_save = call(Path(manifest['max-source-ref']), ANY)
         avg_save = call(Path(manifest['avg-source-ref']), ANY)
 
-        calls = [mask_save, outline_save, max_save, avg_save]
+        calls = [mask_save, outline_save, full_outline_save,
+                 max_save, avg_save]
         mock_imageio.imsave.assert_has_calls(calls, any_order=False)
 
     # Assert that created manifests are correct

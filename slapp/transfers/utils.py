@@ -98,7 +98,7 @@ def upload_file(file_name, bucket, key=None, skipcheck=False):
     return uri
 
 
-def upload_manifest_contents(local_manifest, bucket, prefix):
+def upload_manifest_contents(local_manifest, bucket, prefix, skip_keys=[]):
     """upload the contents of a manifest, returning a copy with
     updated S3 URIs
 
@@ -111,6 +111,9 @@ def upload_manifest_contents(local_manifest, bucket, prefix):
         name of s3 bucket
     prefix: str
         prefix for object keys
+    skip_keys: list
+        skip the upload for these keys. Used to not duplicate upload of
+        objects common to many manifests.
 
     Returns
     -------
@@ -121,6 +124,8 @@ def upload_manifest_contents(local_manifest, bucket, prefix):
     """
     s3_manifest = {}
     for k, v in local_manifest.items():
+        if k in skip_keys:
+            continue
         if k in ['experiment-id', 'roi-id']:
             s3_manifest[k] = v
         else:

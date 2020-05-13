@@ -11,7 +11,8 @@ def mock_db_conn_fixture(tmpdir_factory):
     tdir = tmpdir_factory.mktemp("contents")
     keys = [
             'source-ref', 'roi-mask-source-ref', 'video-source-ref',
-            'max-source-ref', 'avg-source-ref', 'trace-source-ref']
+            'max-source-ref', 'avg-source-ref', 'trace-source-ref',
+            'full-video-source-ref']
     return_val = {
             'experiment-id': 1234,
             'roi-id': 98765

@@ -3,6 +3,12 @@ import datetime
 import tempfile
 import slapp.transfers.utils as utils
 import slapp.utils.query_utils as query_utils
+import numpy as np
+import pathlib
+
+
+class LabelDataException(Exception):
+    pass
 
 
 class UploadSchema(argschema.ArgSchema):
@@ -55,7 +61,7 @@ class LabelDataUploader(argschema.ArgSchemaParser):
                     f"Requested {nrequested}, received {nman}. "
                     f"Missing ids: {missing_ids}")
 
-        # upload the per-ROI manifests
+        # specify the URI
         prefix = self.args['prefix']
         if self.args['timestamp']:
             if prefix is None:
@@ -66,13 +72,29 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         uri = utils.s3_uri(self.args['s3_bucket_name'], prefix)
         self.logger.info(f"bucket destination is {uri}")
 
+        # upload the per-experiment object
+        full_video_path = np.unique([m['full-video-source-ref']
+                                     for m in manifests])
+        if len(full_video_path) != 1:
+            raise LabelDataException(
+                    "manifests do not share a single movie path")
+        object_key = prefix + "/" + pathlib.PurePath(full_video_path[0]).name
+        s3_full_video = utils.upload_file(
+                full_video_path[0],
+                self.args['s3_bucket_name'],
+                object_key)
+        experiment_manifest = {'full-video-source-ref': s3_full_video}
+
+        # upload the per-ROI manifests
         s3_manifests = []
         for nm, manifest in enumerate(manifests):
             s3_manifests.append(
                 utils.upload_manifest_contents(
                     manifest,
                     self.args['s3_bucket_name'],
-                    prefix))
+                    prefix,
+                    skip_keys=['full-video-source-ref']))
+            s3_manifests[-1].update(experiment_manifest)
             if ((nm + 1) % 100 == 0) | (nm == nman - 1):
                 self.logger.info(
                         f"uploaded source data for {nm + 1} / {nman} ROIs")
