@@ -119,9 +119,9 @@
   >
     <classification-target>
       <div class="btn-group d-flex rounded border" role="group" style="margin-bottom:20;">
-        <button class="btn btn-light w-100" id="toggle-mask" type="button" onclick="toggleMaskOutline()">Show Mask Overlay</button>
         <button class="btn btn-light w-100" id="toggle-roi" type="button">Hide ROI</button>
         <button class="btn btn-light w-100" id="toggle-colorblind" type="button" onclick="toggleColorblind()">Colorblind Mode</button>
+        <button class="btn btn-light w-100" id="toggle-mask" type="button" onclick="toggleMaskOutline()">Show Mask Overlay</button>
      </div>
 
       <div class="classification-target-container">
@@ -255,6 +255,11 @@
               }, false, null);
             },
             click: function (event) {
+              let isPlaying = video.currentTime > 0 && !video.paused && !video.ended;
+              if (!isPlaying) {
+                // Draw frame if it's not already animating
+                $(video).one("timeupdate", function(e) { drawVideo()});
+              };
               video.currentTime = event.xAxis[0].value;
             },
           }
@@ -313,6 +318,11 @@
             pointInterval: data.pointInterval, 
             events: { 
               click: function (event) {
+                let isPlaying = video.currentTime > 0 && !video.paused && !video.ended;
+                if (!isPlaying) {
+                // Draw frame if it's not already animating
+                $(video).one("timeupdate", function(e) { drawVideo()});
+              };
                 video.currentTime = event.point.x;
               },
             },
@@ -330,6 +340,9 @@
 
   // Get globals
   var video = new Video(decodeLiquidUri("{{ task.input.video-source-ref | grant_read_access }}")),
+    animationId,
+    pauseFuture,    // Tracking 
+    isPlaying = video.currentTime > 0 && !video.paused && !video.ended && video.readyState >= 2,
     videoButton = document.getElementById('play-pause'),
     colorblindMode = false,
     maskOverlays = false,
@@ -348,13 +361,12 @@
     contrastOutput = document.getElementById("contrast-output"),
     overlay = getRoiOverlay();
   
-  // Initialize canvases
-  overlayImages(roiThumbnail, decodeLiquidUri("{{ task.input.roi-mask-source-ref | grant_read_access }}"), decodeLiquidUri("{{ task.input.source-ref | grant_read_access }}"), 1.0, overlay.filter, "black");
-  overlayImages(avgProjection, decodeLiquidUri("{{ task.input.avg-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity, overlay.filter);
-  overlayImages(maxProjection, decodeLiquidUri("{{ task.input.max-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity, overlay.filter);
-  // Need greater than zero time to get the first frame to draw
-  video.currentTime = 0.000001;
-  videoProcessor();
+  // Need greater than zero time to get first frame to draw
+  video.currentTime = 0.0001;
+  // When video is first ready, draw all canvases
+  $(video).one("canplay", function () {
+    redrawCanvases();
+  });
   
   // Add event listeners
   contrastSlider.addEventListener("input", function() {
@@ -370,14 +382,20 @@
     togglePlayPause();
   }, false);
 
+  video.addEventListener("play", function () {
+    videoProcessor();
+  }, false);
+
   video.addEventListener('pause', function() {
     // Update play/pause button icon with video state
     togglePlayPause();
+    cancelAnimationFrame(animationId);
   }, false);
 
   video.addEventListener('ended', function() {
     // Update play/pause button icon with video state
     togglePlayPause();
+    cancelAnimationFrame(animationId);
   }, false);
 
   video.addEventListener("timeupdate", function() {
@@ -385,25 +403,19 @@
     updateProgress()
   }, false);
 
-  video.addEventListener('play', function () {
-    // Draw canvas frames
-    videoProcessor();
-  }, false);
-
   visButton.addEventListener("click", function () {
     // Toggle visibility of ROIs
     toggleRoiVis();
   }, false);
 
-
-  brightnessSlider.addEventListener("input", function() {
-    // Update brightness/contrast values
-    videoProcessor();
+  brightnessSlider.addEventListener("change", function() {
+    // Update brightness/contrast values after selection made
+    redrawCanvases(false);
   }, false);
 
-  contrastSlider.addEventListener("input", function() {
-    // Update brightness/contrast values
-    videoProcessor();
+  contrastSlider.addEventListener("change", function() {
+    // Update brightness/contrast values after selection made
+    redrawCanvases(false);
   }, false);
 
   videoButton.addEventListener('click', function(e) {
@@ -431,6 +443,7 @@
       overImg.src = overlay
     }
     overImg.onload = function () {
+      brightnessContrast(ctx);
       ctx.drawImage(underImg, 0, 0);
       ctx.filter = filter;
       ctx.globalAlpha = alpha;
@@ -442,14 +455,20 @@
   }
 
   function setValueDefault(id, value) {
-    // Manually trigger input event to update associated label
+    // Trigger required events on Reset button for sliders
     let elem = document.getElementById(id),
-      event = new Event('input', {
+      inputEvent = new Event('input', {
+        bubbles: true,
+        cancelable: true,
+      });
+      changeEvent = new Event('change', {
         bubbles: true,
         cancelable: true,
       });
     elem.value = value;
-    elem.dispatchEvent(event)
+    // Need change event to redraw canvases, input event for percentage
+    elem.dispatchEvent(inputEvent);
+    elem.dispatchEvent(changeEvent);
   }
 
   function RoiImages() {
@@ -488,22 +507,24 @@
     }
     return v;
   }
-
+  function drawVideo() {
+    let ctx = canvas.getContext("2d"),
+      overlay = getRoiOverlay();
+    brightnessContrast(ctx)
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.filter = overlay.filter;
+    ctx.globalAlpha = overlay.opacity * overlay.visibility;
+    ctx.drawImage(overlay.mask, 0, 0);
+    ctx.filter = "none";
+    ctx.globalAlpha = 1.0;
+  }
   function videoProcessor() {
     // Draw the video frames on canvas (with overlay)
     function step() {
-      brightnessContrast(ctx)
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.filter = overlay.filter;
-      ctx.globalAlpha = overlay.opacity * overlay.visibility;
-      ctx.drawImage(overlay.mask, 0, 0);
-      ctx.filter = "none";
-      ctx.globalAlpha = 1.0;
-      requestAnimationFrame(step);
+      drawVideo();
+      animationId = requestAnimationFrame(step);
   }
-    let ctx = canvas.getContext("2d"),
-      overlay = getRoiOverlay();
-    requestAnimationFrame(step);
+    animationId = requestAnimationFrame(step);
   }
 
   function brightnessContrast(ctx) {
@@ -562,12 +583,16 @@
     progressFill.style.flexBasis = value.toString() + "%"
   }
 
-  function redrawCanvases() {
+  function redrawCanvases(draw_roi) {
+    // Draw all canvases. Pass false to draw_roi if don't want to redraw the thumbnail
+    // (e.g. updating the brightness/contrast)
     let overlay = getRoiOverlay();
     overlayImages(avgProjection, decodeLiquidUri("{{ task.input.avg-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
     overlayImages(maxProjection, decodeLiquidUri("{{ task.input.max-source-ref | grant_read_access }}"), overlay.mask.src, overlay.opacity*overlay.visibility, overlay.filter);
-    overlayImages(roiThumbnail, decodeLiquidUri("{{ task.input.roi-mask-source-ref | grant_read_access }}"), decodeLiquidUri("{{ task.input.source-ref | grant_read_access }}"), overlay.visibility, overlay.filter, "black");
-    videoProcessor();
+    drawVideo();
+    if (draw_roi !== false) {
+      overlayImages(roiThumbnail, decodeLiquidUri("{{ task.input.roi-mask-source-ref | grant_read_access }}"), decodeLiquidUri("{{ task.input.source-ref | grant_read_access }}"), overlay.visibility, overlay.filter, "black");
+    };
   }
 
   function toggleMaskOutline() {
@@ -594,7 +619,12 @@
     let extremes = chart.xAxis[0].getExtremes(),
       startTime = extremes.min,
       endTime = extremes.max;
-    video.removeEventListener("timeupdate", pauseAtTime);
+    // Remove current pause handler if it exists
+    if (pauseFuture !== undefined) {
+      video.removeEventListener("timeupdate", pauseFuture);
+    };
+    pauseFuture = setPauseTime(endTime);
+    video.addEventListener("timeupdate", pauseFuture);
     let isPlaying = video.currentTime > 0 && !video.paused && !video.ended;
     if (endTime <= startTime) throw "Selection end must be after start.";
     if (!isPlaying) {
@@ -603,14 +633,15 @@
     } else {
       video.currentTime = startTime;
     }
-    var pauseAtTime = function(){
-      if (video.currentTime >= endTime) {
-        video.pause();
-        video.removeEventListener("timeupdate", pauseAtTime);
-      };
-    }
-    video.addEventListener("timeupdate", pauseAtTime);
   };
+
+  function setPauseTime(endTime) {
+    return function() {
+      if (video.currentTime >= endTime ) {
+        video.pause();
+      }
+    };
+  }
 
   function changeVideoSpeed(speed) {
     video.playbackRate = speed;
