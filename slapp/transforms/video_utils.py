@@ -100,8 +100,8 @@ def transform_to_webm(video: np.ndarray, output_path: str,
         for fname in results:
             fp.write(f"file '{fname}'\n")
 
-    sub_args = ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i',
-                listfile.name, '-c', 'copy', output_path]
+    sub_args = [mpg.get_ffmpeg_exe(), '-y', '-f', 'concat', '-safe',
+                '0', '-i', listfile.name, '-c', 'copy', output_path]
     subprocess.run(sub_args)
 
     listfile.close()
