@@ -1,6 +1,7 @@
 import slapp.utils.query_utils as qu
 import argschema
 import h5py
+import pathlib
 from slapp.data_selection.utils import find_full_movie
 
 
@@ -64,7 +65,8 @@ class SegmentationManifest(argschema.ArgSchemaParser):
         manifest = {'manifest': []}
         for result in lims_results:
             # get the full video path
-            video_path = find_full_movie(result['storage_directory'])
+            video_path = find_full_movie(
+                    pathlib.Path(result['storage_directory']))
             with h5py.File(video_path, "r") as h5f:
                 nframes_h5 = h5f['data'].shape[0]
             if nframes_h5 != result['nframes']:
@@ -79,7 +81,7 @@ class SegmentationManifest(argschema.ArgSchemaParser):
             manifest['manifest'].append({
                 'experiment_id': result['id'],
                 'nbinned': int(result['nframes'] / self.args['bin_size']),
-                'input_video': video_path
+                'input_video': str(video_path)
                 })
 
         self.output(manifest, indent=2)
