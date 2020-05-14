@@ -69,7 +69,8 @@ def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
       "input_fps": 31,
       "output_fps": 4,
       "downsampling_strategy": 'average',
-      "random_seed": 0},
+      "random_seed": 0,
+      "font_file": "replace_me_with_a_tmp_path"},
 
      {"SELECT id FROM rois WHERE segmentation_run_id=42": [
          {"id": 0}, {"id": 777}],
@@ -88,6 +89,9 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
                             expected_manifest_metadata):
 
     input_data["artifact_basedir"] = str(tmp_path)
+    tmp_font_path = tmp_path / 'test.txt'
+    open(tmp_font_path.as_posix(), 'x+')
+    input_data["font_file"] = str(tmp_font_path)
 
     def normalize_side_effect(value, dummya, dummyb):
         return value
@@ -97,6 +101,7 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     mock_imageio = MagicMock()
     mock_content_extents = MagicMock(return_value=([0, 0, 2, 2], [1, 1, 1, 1]))
     mock_transform_to_webm = MagicMock()
+    mock_add_scale = MagicMock()
     mock_np = MagicMock()
     mock_np.quantile = MagicMock(return_value=(0, 1))
 
@@ -106,6 +111,7 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     mpatcher(name="imageio", value=mock_imageio)
     mpatcher(name="content_extents", value=mock_content_extents)
     mpatcher(name="normalize_array", value=mock_normalize)
+    mpatcher(name="add_scale", value=mock_add_scale)
     mpatcher(name="transform_to_webm", value=mock_transform_to_webm)
     mpatcher(name="np", value=mock_np)
 
