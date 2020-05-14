@@ -76,10 +76,18 @@ class DataSelector(argschema.ArgSchemaParser):
 
         self.logger.info(f"sub-selected ids {sub_experiments}")
 
+        # postgres wants equal-length sub-arrays for multi-dimensional
+        # arrays. Pad with NULL
+        max_length = max([len(e) for e in experiment_ids])
+        for i in range(len(experiment_ids)):
+            nextra = max_length - len(experiment_ids[i])
+            experiment_ids[i].extend([None] * nextra)
+        experiments_str = repr(experiment_ids).replace('None', 'NULL')
+
         insert_statement = insert_statement_template.format(
             f"ARRAY{repr(b64_queries)}",
             f"'{os.environ['TRANSFORM_HASH']}'",
-            f"ARRAY{repr(experiment_ids)}",
+            f"ARRAY{experiments_str}",
             f"ARRAY{repr(sub_experiments)}",
             f"{self.args['random_seed']}",
             f"'{self.args['comment_string']}'")
