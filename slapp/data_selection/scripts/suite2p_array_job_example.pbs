@@ -33,8 +33,9 @@ echo nbinned: ${nbinned}
 echo ""
 
 # mlflow has some annoying collision on mkdir ./mlruns
-# this kind of helps when the array size is large
-sleep $[ ( $RANDOM % 250 )  + 1 ]s
+# this avoids collisions
+export TMPDIR=/scratch/capacity/${PBS_JOBID}
+cd ${TMPDIR}
 
 python -m segment.scripts.launch \
 	--pipeline suite2p \
