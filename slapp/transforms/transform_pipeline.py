@@ -1,18 +1,19 @@
-import argschema
-import marshmallow as mm
-from pathlib import Path
-import os
-import json
-import imageio
-import numpy as np
 import datetime
+import json
+import multiprocessing
+import os
+from pathlib import Path
+
+import argschema
+import imageio
+import marshmallow as mm
+import numpy as np
+
 import slapp.utils.query_utils as query_utils
 from slapp.rois import ROI
-from slapp.transforms.video_utils import (
-    downsample_h5_video, transform_to_webm)
-from slapp.transforms.array_utils import (
-        content_extents, downsample_array, normalize_array)
-
+from slapp.transforms.array_utils import (content_extents, downsample_array,
+                                          normalize_array)
+from slapp.transforms.video_utils import downsample_h5_video, transform_to_webm
 
 insert_str_template = (
         "INSERT INTO roi_manifests "
@@ -86,8 +87,22 @@ class TransformPipelineSchema(argschema.ArgSchema):
                      "histogram adjustment"))
     webm_bitrate = argschema.fields.Str(
         required=False,
-        default="192k",
+        default="0",
         description="passed as bitrate to imageio-ffmpeg.write_frames()")
+    webm_quality = argschema.fields.Int(
+        required=False,
+        default=30,
+        description=("Governs encoded video perceptual quality. "
+                     "Can be from 0-63. Lower values mean higher quality. "
+                     "Passed as crf to ffmpeg")
+    )
+    webm_parallelization = argschema.fields.Int(
+        required=False,
+        default=1,
+        description=("Number of parallel processes to use for video encoding. "
+                     "A value of -1 results in "
+                     "using multiprocessing.cpu_count()")
+    )
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -117,6 +132,12 @@ class TransformPipelineSchema(argschema.ArgSchema):
                 raise TransformPipelineException(
                     f"{query_string} did not return exactly 1 result")
             data['segmentation_run_id'] = entries[0]['id']
+        return data
+
+    @mm.post_load
+    def set_webm_parallelization(self, data, **kwargs):
+        if data["webm_parallelization"] == -1:
+            data["webm_parallelization"] = multiprocessing.cpu_count()
         return data
 
 
@@ -174,8 +195,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
         # experiment-level artifact
         full_video_path = output_dir / "full_video.webm"
         transform_to_webm(
-                downsampled_video, str(full_video_path),
-                playback_fps, self.args['webm_bitrate'])
+            video=downsampled_video, output_path=str(full_video_path),
+            fps=playback_fps, ncpu=self.args['webm_parallelization'],
+            bitrate=self.args['webm_bitrate'], crf=self.args['webm_quality'])
 
         # create the per-ROI artifacts
         insert_statements = []
@@ -213,8 +235,10 @@ class TransformPipeline(argschema.ArgSchemaParser):
                     downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
                     ((0, 0), *pads))
             transform_to_webm(
-                    sub_video, str(sub_video_path),
-                    playback_fps, self.args['webm_bitrate'])
+                video=sub_video, output_path=str(sub_video_path),
+                fps=playback_fps, ncpu=self.args['webm_parallelization'],
+                bitrate=self.args['webm_bitrate'],
+                crf=self.args['webm_quality'])
 
             # sub-projections
             sub_max = np.pad(
