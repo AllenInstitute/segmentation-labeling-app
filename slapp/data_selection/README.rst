@@ -10,7 +10,9 @@ These modules are used to select and segment experiments. In context of the rest
 5. upload data sources and manifest to S3
 6. launch labeling job
 
-This README is concerned with 1, 2 and 3.
+This README is concerned with 1, 2 and 3. We have established 4 postgres tables to back the data selection and transform processes for ``slapp``: ``experiment_selection``, ``segmentation_runs``, ``rois`` and ``roi_manifests``. The design of these tables is currently documented in informatics_design_, though design docs and docs, including this one, should be consolidated with into this repo in the future.  Experiment selection and segmentation manifest creation communicate with LIMS postgres tables as well. The segmentation manifest drives segmentation with ``Suite2P``, which is currently implemented in the repo ophys_segmentation_. The transforms, upload and labeling job front-end are contained in this repo.
+
+.. _informatics_design: https://github.com/AllenInstitute/informatics_design_docs/blob/master/ophys/segmentation/README.rst
 
 Select experiments
 ------------------
@@ -100,16 +102,6 @@ The ``log_level`` keys are a result of using arschema to validate this output wi
 
 Segment experiments into ROIs from segmentation manifest
 --------------------------------------------------------
-We have included an example_ script to document how to use the segmentation manifest to run Suite2P segmentation.
+We have included an example_ in the ophys_segmentation_ repo that uses this manifest to segment with Suite2P and write results to the postgres tables ``segmentation_runs`` and ``rois``.
 
-This script is an example only. The user will need to modify it. Some key points for using this script:
-
-- ``#PBS -o`` should be redirected to somewhere where the user has write permissions.
-- ``#PBS -t`` controls the array job. If your manifest contains 100 experiments ``#PBS -t 0-99`` will run them all. If you want to dribble them out 10 at a time ``#PBS -t 0-99%10``. If you want to rerun one or a few specific jobs ``#PBS -t 12,34,84`` comma-separated specification must be in order.
-- Know your conda env. There is no guarantee that the one in this example exists or is up to date. The user needs a conda environment that has ophys_segmentation_ and Suite2P installed.
-- The line ``source .. sourceme.sh`` is how I set the ENV variables ``MLFLOW_DB_USER``, ``MLFLOW_DB_PASSWORD``, ``LABELING_USER``, ``LABELING_PASSWORD``, ``LIMS_USER`` and ``LIMS_PASSWORD``. You need these. Set them somehow.
-- Change the line ``manifest=`` to the path of the manifest you created in the step above.
-
-The jobs from running this script will segment videos with Suite2P and write entries to the postgres tables ``segmentation_runs`` and ``rois``. They are then ready for running the transform pipeline.
-
-.. _example: scripts/suite2p_array_job_example.pbs
+.. _example: https://github.com/AllenInstitute/ophys_segmentation/blob/develop/pbs/labeling/README.rst
