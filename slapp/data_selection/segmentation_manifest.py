@@ -1,3 +1,6 @@
+# NOTE this module needs connections to LIMS and the
+# postgres table `experiment_selection` created for the
+# labeling effort.
 import slapp.utils.query_utils as qu
 import argschema
 import h5py
