@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 
-def add_scale(image: Union[Path, np.ndarray],
+def add_scale(arr: Union[Path, np.ndarray],
               scale_position: Tuple[int, int],
               font_file: Path,
               resolution: float = 400 / 512,
@@ -20,8 +20,8 @@ def add_scale(image: Union[Path, np.ndarray],
     onto images.
     Parameters
     ----------
-    image: [Path, np.ndarray]
-        path to the image to add scale bar
+    arr: [Path, np.ndarray]
+        path to the image or numpy array to add scale bar
     scale_position: Tuple
         the position at which to set the bottom left corner of the scale. In
         x, y format, this is the format PIL expects.
@@ -49,13 +49,15 @@ def add_scale(image: Union[Path, np.ndarray],
         PIL image object with the appended scale bar drawn on top
     """
     # open image as PIL Image object and create draw object
-    if isinstance(image, Path):
-        image = Image.open(image.as_posix()).convert('RGBA')
-    elif isinstance(image, np.ndarray):
-        image = Image.fromarray(image).convert('RGBA')
+    if isinstance(arr, Path):
+        image = Image.open(arr.as_posix()).convert('RGBA')
+    elif isinstance(arr, np.ndarray):
+        image = Image.fromarray(arr).convert('RGBA')
+        image.putalpha(arr)
     else:
         raise ValueError('Supplied image is not a matrix or a path to '
                          'an image file.')
+
     draw = ImageDraw.Draw(image)
 
     pixel_cnt = ceil(scale_size / resolution)
@@ -72,5 +74,4 @@ def add_scale(image: Union[Path, np.ndarray],
     draw.text((scale_position[0] + pixel_cnt + 5,
                scale_position[1] - font_size),
               f"{scale_size} \u03BCm", font=font, fill=fill)
-
     return image
