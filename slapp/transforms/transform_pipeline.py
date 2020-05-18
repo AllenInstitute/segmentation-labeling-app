@@ -242,17 +242,14 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
             outline_with_scale = add_scale(outline, scale_position,
                                            font_file_path)
-            outline_with_scale_info = outline_with_scale.info
-            outline_with_scale.save(outline_path, 'PNG',
-                                    **outline_with_scale_info)
+            outline_with_scale.save(outline_path, 'PNG', transparency=0)
 
             full_outline_with_scale = add_scale(full_outline,
                                                 scale_position_full,
                                                 font_file_path,
                                                 scale_size=40)
-            full_outline_with_scale_info = full_outline_with_scale.info
             full_outline_with_scale.save(full_outline_path, 'PNG',
-                                         **full_outline_with_scale_info)
+                                         transparency=0)
 
             # video sub-frame
             inds, pads = content_extents(
