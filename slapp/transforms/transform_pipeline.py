@@ -11,9 +11,13 @@ import numpy as np
 
 import slapp.utils.query_utils as query_utils
 from slapp.rois import ROI
-from slapp.transforms.array_utils import (content_extents, downsample_array,
-                                          normalize_array)
-from slapp.transforms.video_utils import downsample_h5_video, transform_to_webm
+from slapp.transforms.video_utils import (downsample_h5_video,
+                                          transform_to_webm)
+from slapp.transforms.array_utils import (
+        content_extents, downsample_array, normalize_array)
+from slapp.transforms.image_utils import (
+    add_scale)
+
 
 insert_str_template = (
         "INSERT INTO roi_manifests "
@@ -89,6 +93,12 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default="0",
         description="passed as bitrate to imageio-ffmpeg.write_frames()")
+    font_file = argschema.fields.InputFile(
+        required=False,
+        default="/allen/aibs/informatics/isaak/fonts/arial.ttf",
+        description=("Path to font file to be used in constructing the "
+                     "videos and images")
+    )
     webm_quality = argschema.fields.Int(
         required=False,
         default=30,
@@ -223,8 +233,22 @@ class TransformPipeline(argschema.ArgSchemaParser):
                 full=True)
 
             imageio.imsave(mask_path, mask, transparency=0)
-            imageio.imsave(outline_path, outline, transparency=0)
-            imageio.imsave(full_outline_path, full_outline, transparency=0)
+
+            # add the scale to the outlines they will toggle with the outline
+            # element on the web app
+            scale_position = (3, outline.shape[1] - 3)
+            scale_position_full = (12, full_outline.shape[1] - 12)
+            font_file_path = Path(self.args['font_file'])
+
+            outline_with_scale = add_scale(outline, scale_position,
+                                           font_file_path)
+            outline_with_scale.save(outline_path, 'PNG')
+
+            full_outline_with_scale = add_scale(full_outline,
+                                                scale_position_full,
+                                                font_file_path,
+                                                scale_size=40)
+            full_outline_with_scale.save(full_outline_path, 'PNG')
 
             # video sub-frame
             inds, pads = content_extents(
