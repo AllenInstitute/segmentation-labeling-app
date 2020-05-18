@@ -54,7 +54,7 @@
     height:5px;
     width: 128px;
     transition:height 0.3s;
-    background:rgba(0,0,0,0.5);
+    background:rgba(0,0,0, 0.5);
     cursor:ew-resize;
   }
   #progress-fill {
@@ -67,7 +67,7 @@
   .enlarged {
     position: relative;
     transform: scale(2);
-    transition: transform 0.35s ease-in-out;
+    transition: transform 0.1s ease-in-out;
     z-index: 100;
     border: 5px solid rgba(235, 235, 235, 1.0);
     border-radius: 5px;
@@ -159,6 +159,33 @@
     z-index: 102;
     opacity: 0.9;
   }
+  .max-img {
+    position: absolute;
+    left: 100;
+    top: 0;
+  }
+  .min-img {
+    position: absolute;
+    top: -57;
+    left: 159;
+  }
+  .img-control {
+    color: #f7f7f7;
+    visibility: hidden;
+    outline: none;
+    border: none;
+    background-color: rgba(0, 0, 0, .75);
+    padding-left: 1.5;
+    padding-right: 1.5;
+    z-index: 105;
+  }
+  .img-control:hover {
+    visibility: visible;
+    cursor: pointer;
+  }
+  .image-container:hover .img-control {
+    visibility: visible;
+  }
 </style>
 
 <!-- Full FOV video lightbox (hidden by default)-->
@@ -198,6 +225,8 @@
             <div id="fade" onClick="closeFullVideo();"></div>
             <div class="image-container">
               <canvas id="roi-vid" width="128" height="128"></canvas>
+              <span class="rounded img-control max-img"><i class="material-icons">photo_size_select_large</i></span>
+              <span class="rounded img-control min-img invisible"><i class="material-icons" style="font-size:32px;">photo_size_select_small</i></span>
               <span class="video-controls">
                 <span class="progress-bar">
                   <span id="progress-fill"></span>
@@ -209,6 +238,8 @@
             <div class="image-label">Avg. Projection</div>
             <div class="image-container">
               <canvas id="avg-projection" width="128" height="128"></canvas>
+              <span class="rounded img-control max-img"><i class="material-icons">photo_size_select_large</i></span>
+              <span class="rounded img-control min-img invisible"><i class="material-icons" style="font-size:32px;">photo_size_select_small</i></span>
             </div>
           </div>
 
@@ -216,6 +247,8 @@
             <div class="image-label">Max Projection</div>
             <div class="image-container">
               <canvas id="max-projection" width="128" height="128"></canvas>
+              <span class="rounded img-control max-img"><i class="material-icons">photo_size_select_large</i></span>
+              <span class="rounded img-control min-img invisible"><i class="material-icons" style="font-size:32px;">photo_size_select_small</i></span>
             </div>
           </div>
 
@@ -223,6 +256,8 @@
             <div class="image-label">ROI Mask</div>
             <div class="image-container"> 
                 <canvas id="roi-thumb" width="128" height="128"></canvas>
+                <span class="rounded img-control max-img"><i class="material-icons">photo_size_select_large</i></span>
+                <span class="rounded img-control min-img invisible"><i class="material-icons" style="font-size:32px;">photo_size_select_small</i></span>
             </div>
           </div>
         </div>
@@ -288,10 +323,7 @@
         <ul>
           <li><b>Movie and Image Views:</b></li>
           <ul type="square">
-            <li>Clicking a movie or image maximizes the view of the
-              selection.</li>
-            <li>Clicking a maximized movie or image will reduce the view to
-              the original size.</li>
+            <li>Hovering over a movie or image shows controls for enlarging/reducing the size.</li>
           </ul>
           <li><b>Traces:</b></li>
           <ul type="square">
@@ -352,9 +384,7 @@
           <li>To play a selected time range, click and drag on the chart or
             adjust the navigation slider below the trace, then click
             "Play Selection".</li>
-          <li>Clicking a movie or image maximizes the view of the selection.</li>
-          <li>Clicking a maximized movie or image will reduce the view to the
-            original size.</li>
+          <li>Hover over a movie or image to show controls for enlarging/reducing the size.</li>
         </ul>
     </short-instructions>
   </crowd-classifier>
@@ -620,7 +650,7 @@
     // default
     let roi = {"filter": "invert(10%) sepia(93%) saturate(7292%) hue-rotate(11deg) brightness(108%) contrast(118%)",
                 "visibility": 1.0};
-    let cb_filter = "invert(87%) sepia(27%) saturate(6091%) hue-rotate(353deg) brightness(105%) contrast(102%)"
+    let cb_filter = "invert(87%) sepia(27%) saturate(6091%) hue-rotate(353deg) brightness(105%) contrast(102%)"  // #ffbe00
     if (maskOverlays) {
       roi.mask = roiOverlays.mask;
       roi.opacity = 0.5;
@@ -796,9 +826,22 @@
   
   video.addEventListener("timeupdate", moveTraceLine);
 
-  $(".image-container canvas").click(function() {
-      $(this).toggleClass("enlarged");
-    });
+  // Enlarge images on click
+  $(".max-img").click( function () {
+    $(this).addClass("invisible");
+    $(this).siblings(".image-container canvas").addClass("enlarged");
+    let maxButton = $(this);
+    setTimeout(function () {
+      maxButton.siblings(".min-img").removeClass("invisible");
+    }, 100);
+  })
+
+  // Minimize enlarged images on click of minimize icon
+  $(".min-img").click(function () {
+    $(this).addClass("invisible");
+    $(this).siblings(".image-container canvas").removeClass("enlarged")
+    $(this).siblings(".max-img").removeClass("invisible");
+  });
 
   $(".dropdown-menu a").click(function() {
     $(this).parents().find(".dropdown-toggle").html(
