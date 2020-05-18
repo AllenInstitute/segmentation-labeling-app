@@ -215,7 +215,6 @@ class TransformPipeline(argschema.ArgSchemaParser):
             # mask and outline from ROI class
             mask_path = output_dir / f"mask_{roi.roi_id}.png"
             outline_path = output_dir / f"outline_{roi.roi_id}.png"
-            outline_path_no_scale = output_dir / f"outline_{roi.roi_id}_no_scale.png"
             full_outline_path = output_dir / f"full_outline_{roi.roi_id}.png"
             sub_video_path = output_dir / f"video_{roi.roi_id}.webm"
             max_proj_path = output_dir / f"max_{roi.roi_id}.png"
@@ -234,7 +233,6 @@ class TransformPipeline(argschema.ArgSchemaParser):
                 full=True)
 
             imageio.imsave(mask_path, mask, transparency=0)
-            imageio.imsave(outline_path_no_scale, outline, transparency=0)
 
             # add the scale to the outlines they will toggle with the outline
             # element on the web app
