@@ -144,6 +144,19 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
         calls = [mask_save, max_save, avg_save]
         mock_imageio.imsave.assert_has_calls(calls, any_order=False)
 
+    # assert that add scale is called and save is called from add_scale
+    calls = []
+    for manifest in expected_manifests:
+        outline_path = Path(manifest['source-ref'])
+        full_outline_path = Path(manifest['full-outline-source-ref'])
+        outline_create = call(ANY, ANY, tmp_font_path)
+        outline_save = outline_create.save(outline_path, 'PNG')
+        full_outline_create = call(ANY, ANY, tmp_font_path, scale_size=40)
+        full_outline_save = full_outline_create.save(full_outline_path, 'PNG')
+        calls += [outline_create, outline_save, full_outline_create,
+                  full_outline_save]
+    mock_add_scale.assert_has_calls(calls, any_order=False)
+
     # Assert that created manifests are correct
     expected_insert_statements = [
             transform_pipeline.insert_str_template.format(
