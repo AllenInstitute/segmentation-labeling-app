@@ -15,11 +15,12 @@ def add_scale(image: Union[Path, np.ndarray],
               width: int = 5,
               font_size: int = 8) -> Image:
     """
-    Adds a scale bar onto a image passed in the form of a image path. Uses
-    PIL library ImageDraw and ImageFont to draw scale bar onto images.
+    Adds a scale bar onto a image passed in the form of a image path or
+    a numpy array. Uses PIL library ImageDraw and ImageFont to draw scale bar
+    onto images.
     Parameters
     ----------
-    image: Path
+    image: [Path, np.ndarray]
         path to the image to add scale bar
     scale_position: Tuple
         the position at which to set the bottom left corner of the scale. In

@@ -138,15 +138,10 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
     for manifest in expected_manifests:
         mask_save = call(Path(manifest['roi-mask-source-ref']), ANY,
                          transparency=0)
-        outline_save = call(Path(manifest['source-ref']), ANY,
-                            transparency=0)
-        full_outline_save = call(
-                Path(manifest['full-outline-source-ref']), ANY, transparency=0)
         max_save = call(Path(manifest['max-source-ref']), ANY)
         avg_save = call(Path(manifest['avg-source-ref']), ANY)
 
-        calls = [mask_save, outline_save, full_outline_save,
-                 max_save, avg_save]
+        calls = [mask_save, max_save, avg_save]
         mock_imageio.imsave.assert_has_calls(calls, any_order=False)
 
     # Assert that created manifests are correct

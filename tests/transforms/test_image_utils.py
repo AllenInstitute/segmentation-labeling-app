@@ -48,10 +48,10 @@ def test_add_scale_png(img_size, scale_position, scale_size, width, expected,
                                      [0, 255, 255, 255, 255],
                                      [0, 255, 255, 255, 255],
                                      [0, 0, 0, 0, 0]]))])
-def test_add_scale_array(img_size, fill_value, scale_position, scale_size, width,
-                         expected, tmp_path):
+def test_add_scale_array(img_size, fill_value, scale_position, scale_size,
+                         width, expected, tmp_path):
     # create dummy png image
-    test_image = np.full(shape=img_size, fill_value=fill_value)
+    test_image = np.full(shape=img_size, fill_value=fill_value, dtype=np.uint8)
     font_file = Path(__file__).parents[1] / 'resources' / 'arial.ttf'
     png_with_scale = image_utils.add_scale(test_image,
                                            scale_position=scale_position,
