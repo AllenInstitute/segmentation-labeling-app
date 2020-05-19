@@ -159,7 +159,9 @@ class ROI:
             absolute_threshold: float = None,
             quantile: float = 0.1,
             dilation_kernel_size: int = 1, inner_outline: bool = True):
-        """return a 2D dense representation of the mask outline
+        """return a 2D dense representation of the mask outline. Black (0)
+        outline on a white (255) background.
+
 
         Parameters
         ----------
@@ -181,7 +183,7 @@ class ROI:
         Returns
         -------
         mask: numpy.ndarray
-            2D dense representation of the mask outline
+            uint8 2D dense representation of the mask outline.
 
         """
         binary = binary_mask_from_threshold(
@@ -195,8 +197,8 @@ class ROI:
 
         xy = np.concatenate(contours).squeeze()
 
-        mask = np.zeros_like(binary)
-        mask[xy[:, 1], xy[:, 0]] = 1.0
+        mask = np.full(binary.shape, False, dtype='uint8')
+        mask[xy[:, 1], xy[:, 0]] = 1
 
         kernel = np.ones((dilation_kernel_size, dilation_kernel_size))
 
@@ -206,5 +208,8 @@ class ROI:
             mask = mask & binary
 
         mask = sized_mask(mask, shape=shape, full=full)
+
+        # convert to 0 outline on 255 background
+        mask = 255 * (1 - mask)
 
         return mask

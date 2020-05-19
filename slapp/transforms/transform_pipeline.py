@@ -93,12 +93,6 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default="0",
         description="passed as bitrate to imageio-ffmpeg.write_frames()")
-    font_file = argschema.fields.InputFile(
-        required=False,
-        default="/allen/aibs/informatics/isaak/fonts/arial.ttf",
-        description=("Path to font file to be used in constructing the "
-                     "videos and images")
-    )
     webm_quality = argschema.fields.Int(
         required=False,
         default=30,
@@ -113,6 +107,30 @@ class TransformPipelineSchema(argschema.ArgSchema):
                      "A value of -1 results in "
                      "using multiprocessing.cpu_count()")
     )
+    scale_offset = argschema.fields.Int(
+        required=False,
+        default=3,
+        description=("number of pixels scale corner is offset from "
+                     "lower left in cropped field-of-view ROI outline"))
+    full_scale_offset = argschema.fields.Int(
+        required=False,
+        default=12,
+        description=("number of pixels scale corner is offset from "
+                     "lower left in full field-of-view ROI outline"))
+    scale_size_um = argschema.fields.Float(
+        required=False,
+        default=10.0,
+        description=("length of scale bars in um in cropped field-of-view "
+                     "ROI outline"))
+    full_scale_size_um = argschema.fields.Float(
+        required=False,
+        default=40.0,
+        description=("length of scale bars in um in full field-of-view "
+                     "ROI outline"))
+    um_per_pixel = argschema.fields.Float(
+        required=False,
+        default=0.78125,
+        description="microns per pixel in the 2P source video")
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -209,6 +227,14 @@ class TransformPipeline(argschema.ArgSchemaParser):
             fps=playback_fps, ncpu=self.args['webm_parallelization'],
             bitrate=self.args['webm_bitrate'], crf=self.args['webm_quality'])
 
+        # where to position the scales for the outlines
+        scale_position = (
+                self.args['scale_offset'],
+                self.args['cropped_shape'][1] - self.args['scale_offset'])
+        full_scale_position = (
+                self.args['full_scale_offset'],
+                max_projection.shape[1] - self.args['full_scale_offset'])
+
         # create the per-ROI artifacts
         insert_statements = []
         for roi in rois:
@@ -234,21 +260,24 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
             imageio.imsave(mask_path, mask, transparency=0)
 
-            # add the scale to the outlines they will toggle with the outline
-            # element on the web app
-            scale_position = (3, outline.shape[1] - 3)
-            scale_position_full = (12, full_outline.shape[1] - 12)
-            font_file_path = Path(self.args['font_file'])
+            outline = add_scale(
+                    outline,
+                    scale_position,
+                    self.args['um_per_pixel'],
+                    self.args['scale_size_um'],
+                    color=0,
+                    fontScale=0.3)
+            full_outline = add_scale(
+                    full_outline,
+                    full_scale_position,
+                    self.args['um_per_pixel'],
+                    self.args['full_scale_size_um'],
+                    color=0,
+                    thickness_um=1.5,
+                    fontScale=0.8)
 
-            outline_with_scale = add_scale(outline, scale_position,
-                                           font_file_path)
-            outline_with_scale.save(outline_path, 'PNG')
-
-            full_outline_with_scale = add_scale(full_outline,
-                                                scale_position_full,
-                                                font_file_path,
-                                                scale_size=40)
-            full_outline_with_scale.save(full_outline_path, 'PNG')
+            imageio.imsave(outline_path, outline, transparency=255)
+            imageio.imsave(full_outline_path, full_outline, transparency=255)
 
             # video sub-frame
             inds, pads = content_extents(
