@@ -69,8 +69,7 @@ def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
       "input_fps": 31,
       "output_fps": 4,
       "downsampling_strategy": 'average',
-      "random_seed": 0,
-      "font_file": "replace_me_with_a_tmp_path"},
+      "random_seed": 0},
 
      {"SELECT id FROM rois WHERE segmentation_run_id=42": [
          {"id": 0}, {"id": 777}],
@@ -89,9 +88,6 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
                             expected_manifest_metadata):
 
     input_data["artifact_basedir"] = str(tmp_path)
-    tmp_font_path = tmp_path / 'test.txt'
-    open(tmp_font_path.as_posix(), 'x+')
-    input_data["font_file"] = str(tmp_font_path)
 
     def normalize_side_effect(value, dummya, dummyb):
         return value
@@ -140,22 +136,15 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
                          transparency=0)
         max_save = call(Path(manifest['max-source-ref']), ANY)
         avg_save = call(Path(manifest['avg-source-ref']), ANY)
+        outline_save = call(Path(manifest['source-ref']), ANY, transparency=0)
+        full_outline_save = call(Path(manifest['full-outline-source-ref']),
+                                 ANY, transparency=0)
 
-        calls = [mask_save, max_save, avg_save]
+        calls = [mask_save, outline_save, full_outline_save,
+                 max_save, avg_save]
         mock_imageio.imsave.assert_has_calls(calls, any_order=False)
 
-    # assert that add scale is called and save is called from add_scale
-    calls = []
-    for manifest in expected_manifests:
-        outline_path = Path(manifest['source-ref'])
-        full_outline_path = Path(manifest['full-outline-source-ref'])
-        outline_create = call(ANY, ANY, tmp_font_path)
-        outline_save = outline_create.save(outline_path, 'PNG')
-        full_outline_create = call(ANY, ANY, tmp_font_path, scale_size=40)
-        full_outline_save = full_outline_create.save(full_outline_path, 'PNG')
-        calls += [outline_create, outline_save, full_outline_create,
-                  full_outline_save]
-    mock_add_scale.assert_has_calls(calls, any_order=False)
+    assert mock_add_scale.call_count == 4
 
     # Assert that created manifests are correct
     expected_insert_statements = [
