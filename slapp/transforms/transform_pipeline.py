@@ -111,24 +111,26 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=3,
         description=("number of pixels scale corner is offset from "
-                     "lower left"))
+                     "lower left in cropped field-of-view ROI outline"))
     full_scale_offset = argschema.fields.Int(
         required=False,
         default=12,
         description=("number of pixels scale corner is offset from "
-                     "lower left"))
+                     "lower left in full field-of-view ROI outline"))
     scale_size_um = argschema.fields.Float(
         required=False,
         default=10.0,
-        description="length of scale bars in um")
+        description=("length of scale bars in um in cropped field-of-view "
+                     "ROI outline"))
     full_scale_size_um = argschema.fields.Float(
         required=False,
         default=40.0,
-        description="length of scale bars in um")
+        description=("length of scale bars in um in full field-of-view "
+                     "ROI outline"))
     um_per_pixel = argschema.fields.Float(
         required=False,
         default=0.78125,
-        description="microns per pixel")
+        description="microns per pixel in the 2P source video")
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):

@@ -30,12 +30,39 @@ def add_scale(array: np.ndarray,
         converted to pixels and passed as `thickness` to
         cv2.line and cv2.putText
     fontScale: float
-        default 0.3. passed as `fontScale` to cv2.fontScale
+        default 0.3. passed as `fontScale` to cv2.putText. See notes.
 
     Returns
     -------
     annotated: numpy.ndarray
         same shape and datatype as input
+
+    Raises
+    ------
+    NotImplementedError
+        if array is not a 2D uint8 np.ndarry
+
+    Notes
+    -----
+    It is not obvious from opencv docs how many pixels in size text will be
+    using cv2.putText. Empirically:
+
+    >>> x = np.full((128, 128), 255, dtype='uint8')
+    >>> cv2.putText(x, '10um', (5, 123), cv2.FONT_HERSHEY_SIMPLEX,
+                0.3, 0, 1, cv2.LINE_4)
+    >>> plt.imshow(x, cmap='gray', interpolation='nearest')
+
+    produces text that is 7 pixels high. opencv provides a utility
+    to check this:
+
+    >>> cv2.getTextSize('10um', cv2.FONT_HERSHEY_SIMPLEX, 0.3, 1)
+    ((28, 7), 3)
+
+    where the second element of the tuple is the height of the bounding
+    box of the text. These results depend not only on fontScale but also
+    thickness. For a line thickness of 1, some examples of (fontScale, height)
+    are (0.3, 7), (0.7, 16), (1.0, 22)
+
     """
     if (array.ndim != 2) | (array.dtype != 'uint8'):
         raise NotImplementedError(
