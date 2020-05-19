@@ -72,8 +72,8 @@ def add_scale(array: np.ndarray,
     annotated = np.copy(array)
     length = np.round(scale_size_um / um_per_pixel).astype('int')
     thickness = np.round(thickness_um / um_per_pixel).astype('int')
-    pt1 = tuple((scale_position[0], scale_position[1] - length + 1))
-    pt2 = tuple((scale_position[0] + length - 1, scale_position[1]))
+    pt1 = (scale_position[0], scale_position[1] - length + 1)
+    pt2 = (scale_position[0] + length - 1, scale_position[1])
     font = cv2.FONT_HERSHEY_SIMPLEX
     linetype = cv2.LINE_4
     cv2.putText(
