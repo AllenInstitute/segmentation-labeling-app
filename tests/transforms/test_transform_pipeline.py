@@ -136,9 +136,10 @@ def test_transform_pipeline(tmp_path, monkeypatch, mock_db_conn_fixture,
                          transparency=0)
         max_save = call(Path(manifest['max-source-ref']), ANY)
         avg_save = call(Path(manifest['avg-source-ref']), ANY)
-        outline_save = call(Path(manifest['source-ref']), ANY, transparency=0)
+        outline_save = call(Path(manifest['source-ref']),
+                            ANY, transparency=255)
         full_outline_save = call(Path(manifest['full-outline-source-ref']),
-                                 ANY, transparency=0)
+                                 ANY, transparency=255)
 
         calls = [mask_save, outline_save, full_outline_save,
                  max_save, avg_save]

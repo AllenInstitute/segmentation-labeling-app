@@ -263,19 +263,19 @@ class TransformPipeline(argschema.ArgSchemaParser):
                     scale_position,
                     self.args['um_per_pixel'],
                     self.args['scale_size_um'],
-                    color=int(outline.max()),
+                    color=0,
                     fontScale=0.3)
             full_outline = add_scale(
                     full_outline,
                     full_scale_position,
                     self.args['um_per_pixel'],
                     self.args['full_scale_size_um'],
-                    color=int(full_outline.max()),
+                    color=0,
                     thickness_um=1.5,
                     fontScale=0.8)
 
-            imageio.imsave(outline_path, outline, transparency=0)
-            imageio.imsave(full_outline_path, full_outline, transparency=0)
+            imageio.imsave(outline_path, outline, transparency=255)
+            imageio.imsave(full_outline_path, full_outline, transparency=255)
 
             # video sub-frame
             inds, pads = content_extents(

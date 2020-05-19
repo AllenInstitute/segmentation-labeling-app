@@ -7,7 +7,7 @@ def add_scale(array: np.ndarray,
               scale_position: Tuple[int, int],
               um_per_pixel: float = 400 / 512,
               scale_size_um: float = 10,
-              color: int = 1,
+              color: int = 0,
               thickness_um: float = 1.0,
               fontScale: float = 0.2) -> np.ndarray:
     """
@@ -24,7 +24,8 @@ def add_scale(array: np.ndarray,
     scale_size_um: float
         length in microns of scale bars
     color: int
-        default 1. passed as `color` to cv2.line and cv2.putText
+        default 0. passed as `color` to cv2.line and cv2.putText
+        0 = black.
     thickness_um: float
         converted to pixels and passed as `thickness` to
         cv2.line and cv2.putText
