@@ -96,7 +96,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
                      "histogram adjustment"))
     projection_upper_quantile = argschema.fields.Float(
         required=False,
-        default=0.95,
+        default=0.99,
         description=("upper quantile threshold for projection "
                      "histogram adjustment"))
     webm_bitrate = argschema.fields.Str(
