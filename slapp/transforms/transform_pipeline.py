@@ -79,15 +79,25 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=0,
         description="random seed to use if downsampling strategy is 'random'")
-    image_lower_quantile = argschema.fields.Float(
+    movie_lower_quantile = argschema.fields.Float(
         required=False,
-        default=0.2,
+        default=0.1,
         description=("lower quantile threshold for avg projection "
-                     "histogram adjustment"))
-    image_upper_quantile = argschema.fields.Float(
+                     "histogram adjustment of movie"))
+    movie_upper_quantile = argschema.fields.Float(
         required=False,
         default=0.999,
         description=("upper quantile threshold for avg projection "
+                     "histogram adjustment of movie"))
+    projection_lower_quantile = argschema.fields.Float(
+        required=False,
+        default=0.2,
+        description=("lower quantile threshold for projection "
+                     "histogram adjustment"))
+    projection_upper_quantile = argschema.fields.Float(
+        required=False,
+        default=0.99,
+        description=("upper quantile threshold for projection "
                      "histogram adjustment"))
     webm_bitrate = argschema.fields.Str(
         required=False,
@@ -185,7 +195,6 @@ class TransformPipeline(argschema.ArgSchemaParser):
         entries = db_conn.query(query_string)
         roi_ids = [i['id'] for i in entries]
 
-        # TODO: here could be a good place to put a pre-filtering stepw
         rois = [ROI.roi_from_query(roi_id, db_conn) for roi_id in roi_ids]
 
         # load and downsample the source video
@@ -203,18 +212,23 @@ class TransformPipeline(argschema.ArgSchemaParser):
         # on quantiles of average projection before per-ROI processing
         avg_projection = np.mean(downsampled_video, axis=0)
         max_projection = np.max(downsampled_video, axis=0)
-        quantiles = [self.args['image_lower_quantile'],
-                     self.args['image_upper_quantile']]
-        # normalize movie and avg according to avg quantiles
+        movie_quantiles = [self.args['movie_lower_quantile'],
+                           self.args['movie_upper_quantile']]
+        proj_quantiles = [self.args['projection_lower_quantile'],
+                          self.args['projection_upper_quantile']]
+        # normalize movie according to avg quantiles
         lower_cutoff, upper_cutoff = np.quantile(
-                avg_projection.flatten(), quantiles)
-        avg_projection = normalize_array(
-                avg_projection, lower_cutoff, upper_cutoff)
+                avg_projection.flatten(), movie_quantiles)
         downsampled_video = normalize_array(
                 downsampled_video, lower_cutoff, upper_cutoff)
-        # normalize max on its own quantiles, to avoid saturation
+        # normalize avg projection
         lower_cutoff, upper_cutoff = np.quantile(
-                max_projection.flatten(), quantiles)
+                avg_projection.flatten(), proj_quantiles)
+        avg_projection = normalize_array(
+                avg_projection, lower_cutoff, upper_cutoff)
+        # normalize max projection
+        lower_cutoff, upper_cutoff = np.quantile(
+                max_projection.flatten(), proj_quantiles)
         max_projection = normalize_array(
                 max_projection, lower_cutoff, upper_cutoff)
 
