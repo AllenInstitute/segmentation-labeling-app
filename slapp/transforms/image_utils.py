@@ -11,9 +11,8 @@ def add_scale(array: np.ndarray,
               thickness_um: float = 1.0,
               fontScale: float = 0.2) -> np.ndarray:
     """
-    Adds a scale bar onto a image passed in the form of a image path or
-    a numpy array. Uses PIL library ImageDraw and ImageFont to draw scale bar
-    onto images.
+    Adds a scale bar onto an array using opencv.
+
     Parameters
     ----------
     array: np.ndarray
