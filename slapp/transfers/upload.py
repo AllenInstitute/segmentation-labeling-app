@@ -111,7 +111,7 @@ class LabelDataUploader(argschema.ArgSchemaParser):
 
         # NOTE a reason to use ThreadPool instead of Pool is that
         # moto testing does not work with a process-based pool
-        # multiprocessing docs do not detail ThreadPool: 
+        # multiprocessing docs do not detail ThreadPool:
         # https://github.com/python/cpython/blob/eb0d359b4b0e14552998e7af771a088b4fd01745/Lib/multiprocessing/pool.py#L918 # noqa
         with ThreadPool(self.args['parallelization']) as pool:
             results = pool.starmap(utils.upload_file, args)
