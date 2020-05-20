@@ -92,7 +92,10 @@ def test_LabelDataUploader(mock_db_conn_fixture, bucket, timestamp, manifest,
     files_in_db = []
     for k, v in in_local_postgres.items():
         if not isinstance(v, int):
-            files_in_db.append(os.path.basename(v))
+            special_prefix = ''
+            if k == 'full-video-source-ref':
+                special_prefix = f"{in_local_postgres['experiment-id']}_"
+            files_in_db.append(special_prefix + os.path.basename(v))
 
     # s3 should have all the files, + 1 manifest
     assert len(files_in_s3) == (len(files_in_db) + 1)
