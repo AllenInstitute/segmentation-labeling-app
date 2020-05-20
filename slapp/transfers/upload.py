@@ -7,10 +7,6 @@ import numpy as np
 import pathlib
 
 
-class LabelDataException(Exception):
-    pass
-
-
 class UploadSchema(argschema.ArgSchema):
     roi_manifests_ids = argschema.fields.List(
         argschema.fields.Int,
@@ -72,18 +68,18 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         uri = utils.s3_uri(self.args['s3_bucket_name'], prefix)
         self.logger.info(f"bucket destination is {uri}")
 
-        # upload the per-experiment object
-        full_video_path = np.unique([m['full-video-source-ref']
+        # upload the per-experiment objects
+        full_video_paths = np.unique([m['full-video-source-ref']
                                      for m in manifests])
-        if len(full_video_path) != 1:
-            raise LabelDataException(
-                    "manifests do not share a single movie path")
-        object_key = prefix + "/" + pathlib.PurePath(full_video_path[0]).name
-        s3_full_video = utils.upload_file(
-                full_video_path[0],
-                self.args['s3_bucket_name'],
-                object_key)
-        experiment_manifest = {'full-video-source-ref': s3_full_video}
+        self.logger.info(f"{full_video_paths.size} full videos to upload")
+        s3_full_videos = {}
+        for video_path in full_video_paths:
+            object_key = prefix + "/" + pathlib.PurePath(video_path).name
+            s3_full_video = utils.upload_file(
+                    video_path,
+                    self.args['s3_bucket_name'],
+                    object_key)
+            s3_full_videos[video_path] = s3_full_video
 
         # upload the per-ROI manifests
         s3_manifests = []
@@ -94,7 +90,8 @@ class LabelDataUploader(argschema.ArgSchemaParser):
                     self.args['s3_bucket_name'],
                     prefix,
                     skip_keys=['full-video-source-ref']))
-            s3_manifests[-1].update(experiment_manifest)
+            s3_manifests[-1]['full-video-source-ref'] = \
+                s3_full_videos[manifest['full-video-source-ref']]
             if ((nm + 1) % 100 == 0) | (nm == nman - 1):
                 self.logger.info(
                         f"uploaded source data for {nm + 1} / {nman} ROIs")
