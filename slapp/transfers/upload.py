@@ -6,6 +6,8 @@ import slapp.utils.query_utils as query_utils
 import numpy as np
 import pathlib
 import jsonlines
+from multiprocessing.pool import ThreadPool
+from functools import partial
 
 
 class UploadSchema(argschema.ArgSchema):
@@ -36,6 +38,10 @@ class UploadSchema(argschema.ArgSchema):
         missing=True,
         description=("whether to append a timestamp "
                      "to the key prefix"))
+    parallelization = argschema.fields.Int(
+        required=False,
+        default=1,
+        description="Number of parallel processes to use for uploading.")
 
 
 class LabelDataUploader(argschema.ArgSchemaParser):
@@ -93,30 +99,38 @@ class LabelDataUploader(argschema.ArgSchemaParser):
                 return_index=True)
         experiment_ids = [manifests[ui]['experiment-id'] for ui in uindex]
         self.logger.info(f"{full_video_paths.size} full videos to upload")
-        s3_full_videos = {}
+
+        args = []
         for eid, video_path in zip(experiment_ids, full_video_paths):
             object_key = prefix + "/" + f"{eid}_"
             object_key += pathlib.PurePath(video_path).name
-            s3_full_video = utils.upload_file(
-                    video_path,
-                    self.args['s3_bucket_name'],
-                    object_key)
-            s3_full_videos[video_path] = s3_full_video
+            args.append((
+                video_path,
+                self.args['s3_bucket_name'],
+                object_key))
+
+        # NOTE a reason to use ThreadPool instead of Pool is that
+        # moto testing does not work with a process-based pool
+        # multiprocessing docs do not detail ThreadPool: 
+        # https://github.com/python/cpython/blob/eb0d359b4b0e14552998e7af771a088b4fd01745/Lib/multiprocessing/pool.py#L918 # noqa
+        with ThreadPool(self.args['parallelization']) as pool:
+            results = pool.starmap(utils.upload_file, args)
+        s3_full_videos = {e: uri for e, uri in zip(experiment_ids, results)}
 
         # upload the per-ROI manifests
         s3_manifests = []
-        for nm, manifest in enumerate(manifests):
-            s3_manifests.append(
-                utils.upload_manifest_contents(
-                    manifest,
-                    self.args['s3_bucket_name'],
-                    prefix,
-                    skip_keys=['full-video-source-ref']))
-            s3_manifests[-1]['full-video-source-ref'] = \
-                s3_full_videos[manifest['full-video-source-ref']]
-            if ((nm + 1) % 100 == 0) | (nm == nman - 1):
-                self.logger.info(
-                        f"uploaded source data for {nm + 1} / {nman} ROIs")
+        upload_partial = partial(
+                utils.upload_manifest_contents,
+                skip_keys=['full-video-source-ref'])
+        args = []
+        for manifest in manifests:
+            args.append((manifest, self.args['s3_bucket_name'], prefix))
+        with ThreadPool(self.args['parallelization']) as pool:
+            s3_manifests = pool.starmap(upload_partial, args)
+
+        for s3_manifest in s3_manifests:
+            s3_manifest['full-video-source-ref'] = \
+                    s3_full_videos[s3_manifest['experiment-id']]
 
         # upload the manifest
         tfile = tempfile.NamedTemporaryFile()
