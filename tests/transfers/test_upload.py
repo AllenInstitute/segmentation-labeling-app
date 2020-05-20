@@ -4,6 +4,7 @@ import boto3
 from moto import mock_s3
 import os
 import slapp.transfers.upload as up
+import json
 
 
 @pytest.fixture
@@ -31,6 +32,28 @@ def mock_db_conn_fixture(tmpdir_factory):
     return mock_db_conn
 
 
+@pytest.fixture
+def mock_manifest(tmpdir_factory):
+    test_dir = tmpdir_factory.mktemp("manifest-file-contents")
+    keys = [
+        'source-ref', 'roi-mask-source-ref', 'video-source-ref',
+        'max-source-ref', 'avg-source-ref', 'trace-source-ref',
+        'full-video-source-ref']
+    return_val = {
+            'experiment-id': 1234,
+            'roi-id': 98765
+            }
+    for ik, key in enumerate(keys):
+        tpath = test_dir.join(f"{ik}.txt")
+        with open(tpath, "w") as fp:
+            fp.write('content')
+        return_val[key] = str(tpath)
+    man_path = test_dir.join("manifest.jsonl")
+    with open(man_path, "w") as mp:
+        mp.write(json.dumps(return_val))
+    return str(man_path)
+
+
 @pytest.fixture(scope='function')
 def bucket():
     with mock_s3():
@@ -40,14 +63,21 @@ def bucket():
         yield bucket_name
 
 
-@pytest.mark.parametrize("timestamp", [True, False])
-def test_LabelDataUploader(mock_db_conn_fixture, bucket, timestamp):
+@pytest.mark.parametrize("timestamp,manifest", [
+    (True, None),
+    (False, None),
+    (False, True)])
+def test_LabelDataUploader(mock_db_conn_fixture, bucket, timestamp, manifest,
+                           mock_manifest):
     args = {
             's3_bucket_name': bucket,
-            'roi_manifests_ids': [0],
             'timestamp': timestamp,
             'prefix': 'abc/def',
             }
+    if manifest:
+        args.update({"manifest_file": mock_manifest})
+    else:
+        args.update({'roi_manifests_ids': [0]})
     ldu = up.LabelDataUploader(input_data=args, args=[])
     ldu.run(mock_db_conn_fixture)
 
