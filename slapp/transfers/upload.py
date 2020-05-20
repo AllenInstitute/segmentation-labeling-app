@@ -5,6 +5,7 @@ import slapp.transfers.utils as utils
 import slapp.utils.query_utils as query_utils
 import numpy as np
 import pathlib
+import jsonlines
 
 
 class LabelDataException(Exception):
@@ -14,10 +15,18 @@ class LabelDataException(Exception):
 class UploadSchema(argschema.ArgSchema):
     roi_manifests_ids = argschema.fields.List(
         argschema.fields.Int,
-        required=True,
+        required=False,
         cli_as_single_argument=True,
+        missing=None,
+        default=None,
         description=("specifies the values of roi_manifests.ids "
                      "to include in the upload"))
+    manifest_file = argschema.fields.InputFile(
+        required=False,
+        missing=None,
+        default=None,
+        description="Manifest file path in jsonlines format."
+    )
     s3_bucket_name = argschema.fields.Str(
         required=True,
         description="destination bucket name")
@@ -43,24 +52,34 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
         # get the specified per-ROI manifests
-        nrequested = len(self.args['roi_manifests_ids'])
-        self.logger.info(
-                f"Requesting {nrequested} roi manifests from postgres")
+        if self.args["roi_manifests_ids"]:
+            nrequested = len(self.args['roi_manifests_ids'])
+            self.logger.info(
+                    f"Requesting {nrequested} roi manifests from postgres")
 
-        idstr = repr(self.args['roi_manifests_ids'])[1:-1]
-        query_string = ("SELECT id, manifest FROM roi_manifests "
-                        f"WHERE id in ({idstr})")
-        results = db_conn.query(query_string)
-        manifests = [r['manifest'] for r in results]
-        nman = len(manifests)
-        if nman != nrequested:
-            manifest_ids = [r['id'] for r in results]
-            missing_ids = \
-                set(self.args['roi_manifests_ids']) - set(manifest_ids)
-            self.logger.warning(
-                    f"Requested {nrequested}, received {nman}. "
-                    f"Missing ids: {missing_ids}")
+            idstr = repr(self.args['roi_manifests_ids'])[1:-1]
+            query_string = ("SELECT id, manifest FROM roi_manifests "
+                            f"WHERE id in ({idstr})")
+            results = db_conn.query(query_string)
+            manifests = [r['manifest'] for r in results]
+            nman = len(manifests)
+            if nman != nrequested:
+                manifest_ids = [r['id'] for r in results]
+                missing_ids = \
+                    set(self.args['roi_manifests_ids']) - set(manifest_ids)
+                self.logger.warning(
+                        f"Requested {nrequested}, received {nman}. "
+                        f"Missing ids: {missing_ids}")
+        elif self.args["manifest_file"]:
+            manifests = []
+            with jsonlines.open(self.args["manifest_file"], "r") as reader:
+                for obj in reader:
+                    manifests.append(obj)
+            nman = len(manifests)
 
+        else:
+            raise ValueError("Need to specify either manifest_file or "
+                             "roi_manifests_ids.")
         # specify the URI
         prefix = self.args['prefix']
         if self.args['timestamp']:
