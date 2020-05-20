@@ -69,12 +69,15 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         self.logger.info(f"bucket destination is {uri}")
 
         # upload the per-experiment objects
-        full_video_paths = np.unique([m['full-video-source-ref']
-                                     for m in manifests])
+        full_video_paths, uindex = np.unique(
+                [m['full-video-source-ref'] for m in manifests],
+                return_index=True)
+        experiment_ids = [manifests[ui]['experiment-id'] for ui in uindex]
         self.logger.info(f"{full_video_paths.size} full videos to upload")
         s3_full_videos = {}
-        for video_path in full_video_paths:
-            object_key = prefix + "/" + pathlib.PurePath(video_path).name
+        for eid, video_path in zip(experiment_ids, full_video_paths):
+            object_key = prefix + "/" + f"{eid}_"
+            object_key += pathlib.PurePath(video_path).name
             s3_full_video = utils.upload_file(
                     video_path,
                     self.args['s3_bucket_name'],
