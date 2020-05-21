@@ -4,6 +4,7 @@ import pathlib
 import jsonlines
 import tempfile
 import filecmp
+import time
 
 
 class S3TransferException(Exception):
@@ -15,7 +16,7 @@ def s3_uri(bucket, key):
     return uri
 
 
-def object_exists(bucket, key):
+def object_exists(bucket, key, max_retries=5, delay=2.0):
     """whether an object exists in an S3 bucket
 
     Parameters
@@ -23,8 +24,11 @@ def object_exists(bucket, key):
     bucket: str
         name of bucket
     key: str
-        object key. If not passed, object key will be
-        basename of the file_name
+        object key.
+    max_retries: int
+        max number of retries, in case of s3 latency
+    delay: float
+        number of seconds to wait between retries
 
     Returns
     -------
@@ -33,11 +37,14 @@ def object_exists(bucket, key):
     """
     exists = False
     client = boto3.client('s3')
-    try:
-        client.head_object(Bucket=bucket, Key=key)
-        exists = True
-    except ClientError:
-        pass
+    for i in range(max_retries):
+        try:
+            client.head_object(Bucket=bucket, Key=key)
+            exists = True
+            break
+        except ClientError:
+            pass
+        time.sleep(delay)
     return exists
 
 
@@ -63,8 +70,9 @@ def local_s3_compare(file_name, bucket, key):
     return True
 
 
-def upload_file(file_name, bucket, key=None, skipcheck=False):
-    """Upload a file to an S3 bucket
+def upload_file(file_name, bucket, key=None, roundtrip=False):
+    """Upload a file to an S3 bucket and perform either an object
+    exists validation or a roundtrip file comparison validation
 
     Parameters
     ----------
@@ -75,9 +83,9 @@ def upload_file(file_name, bucket, key=None, skipcheck=False):
     key: str
         object key. If not passed, object key will be
         basename of the file_name
-    skipcheck: bool
-        whether to skip the roundtrip check. Could be useful
-        in non-critical moments for large files
+    roundtrip: bool
+        whether to perform a roundtrip download and comparison with
+        the original file
 
     Returns
     -------
@@ -88,12 +96,22 @@ def upload_file(file_name, bucket, key=None, skipcheck=False):
     if key is None:
         key = pathlib.PurePath(file_name).name
 
+    # if the object already exists, the upload will be an overwrite.
+    exists = object_exists(bucket, key)
+
     client = boto3.client('s3')
     client.upload_file(file_name, bucket, key)
     uri = s3_uri(bucket, key)
 
-    if not skipcheck:
+    if exists | roundtrip:
+        # slow for large files
         assert local_s3_compare(file_name, bucket, key)
+    else:
+        # can be fast, has some retries and delays
+        try:
+            assert object_exists(bucket, key)
+        except AssertionError:
+            raise S3TransferException(f"{bucket}/{key} does not exist")
 
     return uri
 
