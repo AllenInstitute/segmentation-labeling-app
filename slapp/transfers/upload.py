@@ -73,7 +73,10 @@ class ResponseSchema(argschema.schemas.DefaultSchema):
 
 
 class UploadOutputSchema(argschema.ArgSchema):
-    responses = argschema.fields.List(
+    successful_uploads = argschema.fields.List(
+        argschema.fields.Nested(ResponseSchema),
+        required=True)
+    failed_uploads = argschema.fields.List(
         argschema.fields.Nested(ResponseSchema),
         required=True)
     local_s3_manifest_copy = argschema.fields.OutputFile(required=True)
@@ -192,8 +195,9 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         # NOTE: the docs for SageMaker GroundTruth specify a JSON Lines format
         # but, throws an error with the .jsonl extension
         # setting here to .json extension to resolve the error.
+        client = utils.ConfiguredUploadClient(**self.args['client_config'])
         result = utils.upload_file(
-                utils.ConfiguredUploadClient(**self.args['client_config']),
+                client,
                 self.args['local_s3_manifest_copy'],
                 self.args['s3_bucket_name'],
                 key=prefix + "/manifest.json")
@@ -201,9 +205,27 @@ class LabelDataUploader(argschema.ArgSchemaParser):
                 f"uploaded {utils.s3_uri(result['bucket'], result['key'])}")
         upload_responses.append(result)
 
+        # cleanup attempt
+        success, failed = utils.sort_upload_results(upload_responses)
+        if len(failed) != 0:
+            self.logger.warning(f"attempting to clean up {len(failed)} "
+                                "failed uploads")
+            cleanup_args = []
+            for r in failed:
+                cleanup_args.append(dict(r))
+                cleanup_args[-1].pop('response')
+            result = utils.upload_files(client, cleanup_args)
+            upload_responses = success + result
+            success, failed = utils.sort_upload_results(upload_responses)
+
+        self.logger.info(f"{len(success)} uploads succeeded")
+        if len(failed) != 0:
+            self.logger.warning(f"{len(failed)} uploads failed")
+
         self.output(
                 {
-                    'responses': upload_responses,
+                    'successful_uploads': success,
+                    'failed_uploads': success,
                     'local_s3_manifest_copy':
                         self.args['local_s3_manifest_copy']
                         },

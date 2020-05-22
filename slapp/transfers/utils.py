@@ -5,30 +5,20 @@ import jsonlines
 from typing import Union, List, TypedDict, Tuple
 import hashlib
 import base64
+import numpy as np
 
 
-def s3_uri(bucket, key):
-    uri = 's3://' + bucket + '/' + key
-    return uri
+class UploadResult(TypedDict):
+    file_name: Union[pathlib.Path, str]
+    bucket: str
+    key: str
+    reponse: dict
 
 
-def get_checksum(file_name: Union[pathlib.Path, str]) -> str:
-    """returns the base64-encoded 128-bit MD5 digest of the file contents
-
-    Parameters
-    ----------
-    file_name: path-like object
-       contents will be checksummed
-
-    Returns
-    -------
-    checksum: str
-        base64-encoded 128-bit MD5 digest
-
-    """
-    hash_object = hashlib.md5(open(file_name, "rb").read())
-    checksum = base64.b64encode(hash_object.digest()).decode('utf-8')
-    return checksum
+class UploadFileArgs(TypedDict):
+    file_name: Union[pathlib.Path, str]
+    bucket: str
+    key: str
 
 
 class ConfiguredUploadClient():
@@ -48,11 +38,52 @@ class ConfiguredUploadClient():
         return self.client.put_object(*args, **kwargs)
 
 
-class UploadResult(TypedDict):
-    file_name: Union[pathlib.Path, str]
-    bucket: str
-    key: str
-    reponse: dict
+def s3_uri(bucket, key):
+    uri = 's3://' + bucket + '/' + key
+    return uri
+
+
+def sort_upload_results(responses: List[UploadResult]) -> \
+                        Tuple[List[UploadResult], List[UploadResult]]:
+    """split a list of upload results according to server response 200
+
+    Parameters
+    ----------
+    reponses: list of UploadResults
+
+    Returns
+    -------
+    success: list of UploadResults
+        with HTTPStatusCode == 200
+    failed: list of UploadResults
+        with HTTPStatusCode != 200
+    """
+    responses = np.array(responses)
+    server_responses = np.array([
+            r['response']['ResponseMetadata']['HTTPStatusCode']
+            for r in responses])
+    success = responses[server_responses == 200]
+    failed = responses[server_responses != 200]
+    return success.tolist(), failed.tolist()
+
+
+def get_checksum(file_name: Union[pathlib.Path, str]) -> str:
+    """returns the base64-encoded 128-bit MD5 digest of the file contents
+
+    Parameters
+    ----------
+    file_name: path-like object
+       contents will be checksummed
+
+    Returns
+    -------
+    checksum: str
+        base64-encoded 128-bit MD5 digest
+
+    """
+    hash_object = hashlib.md5(open(file_name, "rb").read())
+    checksum = base64.b64encode(hash_object.digest()).decode('utf-8')
+    return checksum
 
 
 def upload_file(
@@ -96,12 +127,6 @@ def upload_file(
             }
 
     return result
-
-
-class UploadFileArgs(TypedDict):
-    file_name: Union[pathlib.Path, str]
-    bucket: str
-    key: str
 
 
 def upload_files(
