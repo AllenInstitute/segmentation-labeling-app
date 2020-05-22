@@ -225,7 +225,7 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         self.output(
                 {
                     'successful_uploads': success,
-                    'failed_uploads': success,
+                    'failed_uploads': failed,
                     'local_s3_manifest_copy':
                         self.args['local_s3_manifest_copy']
                         },
