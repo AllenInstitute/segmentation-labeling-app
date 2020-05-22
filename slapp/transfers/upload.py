@@ -90,7 +90,8 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         self.logger.name = type(self).__name__
 
         # unique timestamp for this invocation
-        self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+        time_start = datetime.datetime.now()
+        self.timestamp = time_start.strftime('%Y%m%d%H%M%S')
 
         # get the specified per-ROI manifests
         if self.args["roi_manifests_ids"]:
@@ -230,6 +231,11 @@ class LabelDataUploader(argschema.ArgSchemaParser):
                         self.args['local_s3_manifest_copy']
                         },
                 indent=2)
+
+        time_end = datetime.datetime.now()
+        self.logger.info("upload job\n"
+                         f"started : {time_start.isoformat()}\n"
+                         f"ended   : {time_end.isoformat()} ")
 
 
 if __name__ == "__main__":  # pragma: no cover
