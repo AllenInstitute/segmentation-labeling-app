@@ -1,13 +1,10 @@
-import boto3
-from botocore.exceptions import ClientError
+import botocore.session
+import botocore.config
 import pathlib
 import jsonlines
-import tempfile
-import filecmp
-
-
-class S3TransferException(Exception):
-    pass
+from typing import Union, List, TypedDict, Tuple
+import hashlib
+import base64
 
 
 def s3_uri(bucket, key):
@@ -15,95 +12,135 @@ def s3_uri(bucket, key):
     return uri
 
 
-def object_exists(bucket, key):
-    """whether an object exists in an S3 bucket
+def get_checksum(file_name: Union[pathlib.Path, str]) -> str:
+    """returns the base64-encoded 128-bit MD5 digest of the file contents
 
     Parameters
     ----------
-    bucket: str
-        name of bucket
-    key: str
-        object key. If not passed, object key will be
-        basename of the file_name
+    file_name: path-like object
+       contents will be checksummed
 
     Returns
     -------
-    exists : bool
+    checksum: str
+        base64-encoded 128-bit MD5 digest
 
     """
-    exists = False
-    client = boto3.client('s3')
-    try:
-        client.head_object(Bucket=bucket, Key=key)
-        exists = True
-    except ClientError:
-        pass
-    return exists
+    hash_object = hashlib.md5(open(file_name, "rb").read())
+    checksum = base64.b64encode(hash_object.digest()).decode('utf-8')
+    return checksum
 
 
-def local_s3_compare(file_name, bucket, key):
-    uri = s3_uri(bucket, key)
-    client = boto3.client('s3')
+class ConfiguredUploadClient():
+    """
+    Notes
+    -----
+    it is not possible to inherit from the botocore.client.S3 class
+    because it does not exist until runtime
+    https://boto3.amazonaws.com/v1/documentation/api/latest/guide/events.html#extensibility-guide # noqa
+    """
+    def __init__(self, *args, **kwargs):
+        session = botocore.session.get_session()
+        config = botocore.config.Config(*args, **kwargs)
+        self.client = session.create_client('s3', config=config)
 
-    try:
-        assert object_exists(bucket, key)
-    except AssertionError:
-        raise S3TransferException(f"{uri} does not exist")
-    try:
-        tfile = tempfile.NamedTemporaryFile()
-        client.download_file(bucket, key, tfile.name)
-        assert filecmp.cmp(file_name, tfile.name)
-    except AssertionError:
-        raise S3TransferException(
-                f"destination object {uri} does not match "
-                f"source file {file_name}")
-    finally:
-        tfile.close()
-
-    return True
+    def put_object(self, *args, **kwargs):
+        return self.client.put_object(*args, **kwargs)
 
 
-def upload_file(file_name, bucket, key=None, skipcheck=False):
+class UploadResult(TypedDict):
+    file_name: Union[pathlib.Path, str]
+    bucket: str
+    key: str
+    reponse: dict
+
+
+def upload_file(
+        client: Union[ConfiguredUploadClient, botocore.client.BaseClient],
+        file_name: Union[pathlib.Path, str],
+        bucket: str,
+        key: str) -> UploadResult:
     """Upload a file to an S3 bucket
 
     Parameters
     ----------
+    client: ConfiguredUploadClient
+        has a put_object() method
     file_name: path-like object
         full path to local file
     bucket: str
         name of bucket
     key: str
-        object key. If not passed, object key will be
-        basename of the file_name
-    skipcheck: bool
-        whether to skip the roundtrip check. Could be useful
-        in non-critical moments for large files
+        object key.
 
     Returns
     -------
-    uri : str
-        URI to S3 object just uploaded
+    result : UploadResult
+        contains the `file_name`, the destination `bucket` and `key`
+        and the server `response`
 
     """
-    if key is None:
-        key = pathlib.PurePath(file_name).name
+    checksum = get_checksum(file_name)
+    with open(file_name, 'rb') as fp:
+        response = client.put_object(
+                Body=fp,
+                Bucket=bucket,
+                Key=key,
+                ContentMD5=checksum)
 
-    client = boto3.client('s3')
-    client.upload_file(file_name, bucket, key)
-    uri = s3_uri(bucket, key)
+    result = {
+            'file_name': file_name,
+            'bucket': bucket,
+            'key': key,
+            'response': response
+            }
 
-    if not skipcheck:
-        assert local_s3_compare(file_name, bucket, key)
-
-    return uri
+    return result
 
 
-def upload_manifest_contents(local_manifest, bucket, prefix, skip_keys=[]):
+class UploadFileArgs(TypedDict):
+    file_name: Union[pathlib.Path, str]
+    bucket: str
+    key: str
+
+
+def upload_files(
+        client: Union[ConfiguredUploadClient, botocore.client.BaseClient],
+        upload_file_args: List[UploadFileArgs]) -> List[UploadResult]:
+    """Uploads a list of files to an S3 bucket. Can be useful for parallelizing
+    with clients.
+
+    Parameters
+    ----------
+    client: ConfiguredUploadClient
+        has a put_object() method
+    upload_file_args: list of UploadFileArgs
+
+    Returns
+    -------
+    results : list of UploadResult
+        each entry contains the `file_name`, the destination `bucket` and
+        `key` and the server `response`
+
+    """
+    results = []
+    for args in upload_file_args:
+        results.append(upload_file(client, **args))
+
+    return results
+
+
+def upload_manifest_contents(
+        client: Union[ConfiguredUploadClient, botocore.client.BaseClient],
+        local_manifest: dict, bucket: str, prefix: str,
+        skip_keys: List = []) -> Tuple[dict, List[UploadResult]]:
     """upload the contents of a manifest, returning a copy with
     updated S3 URIs
 
     Parameters
     ----------
+    client: ConfiguredUploadClient
+        has a put_object() method
     local_manifest: dict
         keys are manifest content names and values are path-like objects
         to local files
@@ -119,20 +156,33 @@ def upload_manifest_contents(local_manifest, bucket, prefix, skip_keys=[]):
     -------
     s3_manifest: dict
         keys are manifest content names and values are s3 URIs to uploaded
-        files
+        objects
+    responses: list
+        list of upload_file responses
 
     """
+    dict_keys = []
     s3_manifest = {}
+    upload_file_args = []
     for k, v in local_manifest.items():
         if k in skip_keys:
             continue
         if k in ['experiment-id', 'roi-id']:
             s3_manifest[k] = v
         else:
-            object_key = prefix + "/" + pathlib.PurePath(v).name
-            s3_manifest[k] = upload_file(v, bucket, object_key)
+            upload_file_args.append(
+                    {
+                        'file_name': v,
+                        'bucket': bucket,
+                        'key': prefix + "/" + pathlib.PurePath(v).name
+                        })
+            dict_keys.append(k)
 
-    return s3_manifest
+    responses = upload_files(client, upload_file_args)
+    for k, r in zip(dict_keys, responses):
+        s3_manifest[k] = s3_uri(r['bucket'], r['key'])
+
+    return s3_manifest, responses
 
 
 def manifest_file_from_jsons(filepath, manifest_jsons):

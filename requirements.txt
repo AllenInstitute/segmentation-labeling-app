@@ -7,6 +7,7 @@ scipy
 pg8000
 pytest
 pytest-cov
+botocore
 boto3
 moto
 ipywidgets

@@ -1,6 +1,6 @@
 import pytest
-from unittest.mock import MagicMock
 import boto3
+from unittest.mock import MagicMock
 from moto import mock_s3
 import os
 import slapp.transfers.upload as up
@@ -66,13 +66,16 @@ def bucket():
 @pytest.mark.parametrize("timestamp,manifest", [
     (True, None),
     (False, None),
-    (False, True)])
+    (False, True)
+    ])
 def test_LabelDataUploader(mock_db_conn_fixture, bucket, timestamp, manifest,
-                           mock_manifest):
+                           mock_manifest, tmp_path):
+    output_json_path = tmp_path / "output.json"
     args = {
             's3_bucket_name': bucket,
             'timestamp': timestamp,
             'prefix': 'abc/def',
+            'output_json': str(output_json_path)
             }
     if manifest:
         args.update({"manifest_file": mock_manifest})
