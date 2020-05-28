@@ -1,11 +1,13 @@
 import argschema
 import datetime
-import tempfile
 import slapp.transfers.utils as utils
 import slapp.utils.query_utils as query_utils
 import numpy as np
 import pathlib
 import jsonlines
+from multiprocessing.pool import ThreadPool
+from functools import partial
+import marshmallow as mm
 
 
 class UploadSchema(argschema.ArgSchema):
@@ -36,16 +38,60 @@ class UploadSchema(argschema.ArgSchema):
         missing=True,
         description=("whether to append a timestamp "
                      "to the key prefix"))
+    parallelization = argschema.fields.Int(
+        required=False,
+        default=1,
+        description="Number of parallel processes to use for uploading.")
+    client_config = argschema.fields.Dict(
+        required=False,
+        missing={'retries': {'mode': 'standard', 'max_attempts': 10}},
+        description=("passed as kwargs to botocore.config.Config() for "
+                     "client configuration."))
+    local_s3_manifest_copy = argschema.fields.OutputFile(
+        required=False,
+        default=None,
+        allow_none=True,
+        description=("file to be written to S3 as overall manifest, "
+                     "saved locally. If path not provided, will default "
+                     "to <timestamp>_s3_manifest.jsonl in output_json dir"))
+
+    @mm.pre_load
+    def set_local_manifest_path(self, data, **kwargs):
+        if data['local_s3_manifest_copy'] is None:
+            timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+            data['local_s3_manifest_copy'] = str(
+                    pathlib.PurePath(data['output_json']).parent /
+                    f"{timestamp}_s3_manifest.jsonl")
+        return data
+
+
+class ResponseSchema(argschema.schemas.DefaultSchema):
+    file_name = argschema.fields.InputFile(required=True)
+    bucket = argschema.fields.Str(required=True)
+    key = argschema.fields.Str(required=True)
+    response = argschema.fields.Dict(required=True)
+
+
+class UploadOutputSchema(argschema.ArgSchema):
+    successful_uploads = argschema.fields.List(
+        argschema.fields.Nested(ResponseSchema),
+        required=True)
+    failed_uploads = argschema.fields.List(
+        argschema.fields.Nested(ResponseSchema),
+        required=True)
+    local_s3_manifest_copy = argschema.fields.OutputFile(required=True)
 
 
 class LabelDataUploader(argschema.ArgSchemaParser):
     default_schema = UploadSchema
+    default_output_schema = UploadOutputSchema
 
     def run(self, db_conn: query_utils.DbConnection):
         self.logger.name = type(self).__name__
 
         # unique timestamp for this invocation
-        self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+        time_start = datetime.datetime.now()
+        self.timestamp = time_start.strftime('%Y%m%d%H%M%S')
 
         # get the specified per-ROI manifests
         if self.args["roi_manifests_ids"]:
@@ -87,49 +133,109 @@ class LabelDataUploader(argschema.ArgSchemaParser):
         uri = utils.s3_uri(self.args['s3_bucket_name'], prefix)
         self.logger.info(f"bucket destination is {uri}")
 
-        # upload the per-experiment objects
+        # find unique experiments and full videos
         full_video_paths, uindex = np.unique(
                 [m['full-video-source-ref'] for m in manifests],
                 return_index=True)
         experiment_ids = [manifests[ui]['experiment-id'] for ui in uindex]
         self.logger.info(f"{full_video_paths.size} full videos to upload")
-        s3_full_videos = {}
+
+        args = []
         for eid, video_path in zip(experiment_ids, full_video_paths):
             object_key = prefix + "/" + f"{eid}_"
             object_key += pathlib.PurePath(video_path).name
-            s3_full_video = utils.upload_file(
-                    video_path,
-                    self.args['s3_bucket_name'],
-                    object_key)
-            s3_full_videos[video_path] = s3_full_video
+            args.append({
+                'file_name': video_path,
+                'bucket': self.args['s3_bucket_name'],
+                'key': object_key})
+        chunked_args = [
+                (
+                    utils.ConfiguredUploadClient(**self.args['client_config']),
+                    i.tolist())
+                for i in np.array_split(args, self.args['parallelization'])]
+
+        # track every server response for potential cleanup operations
+        upload_responses = []
+
+        # NOTE a reason to use ThreadPool instead of Pool is that
+        # moto testing does not work with a process-based pool
+        # multiprocessing docs do not detail ThreadPool:
+        # https://github.com/python/cpython/blob/eb0d359b4b0e14552998e7af771a088b4fd01745/Lib/multiprocessing/pool.py#L918 # noqa
+        with ThreadPool(self.args['parallelization']) as pool:
+            results = pool.starmap(utils.upload_files, chunked_args)
+        results = [i for r in results for i in r]
+        s3_full_videos = {e: utils.s3_uri(r['bucket'], r['key'])
+                          for e, r in zip(experiment_ids, results)}
+        upload_responses.extend([r for r in results])
 
         # upload the per-ROI manifests
         s3_manifests = []
-        for nm, manifest in enumerate(manifests):
-            s3_manifests.append(
-                utils.upload_manifest_contents(
-                    manifest,
-                    self.args['s3_bucket_name'],
-                    prefix,
-                    skip_keys=['full-video-source-ref']))
-            s3_manifests[-1]['full-video-source-ref'] = \
-                s3_full_videos[manifest['full-video-source-ref']]
-            if ((nm + 1) % 100 == 0) | (nm == nman - 1):
-                self.logger.info(
-                        f"uploaded source data for {nm + 1} / {nman} ROIs")
+        upload_partial = partial(
+                utils.upload_manifest_contents,
+                utils.ConfiguredUploadClient(**self.args['client_config']),
+                skip_keys=['full-video-source-ref'])
+        args = []
+        for manifest in manifests:
+            args.append((manifest, self.args['s3_bucket_name'], prefix))
+        with ThreadPool(self.args['parallelization']) as pool:
+            results = pool.starmap(upload_partial, args)
+        s3_manifests, responses = list(zip(*results))
+        for r in responses:
+            upload_responses.extend(r)
+
+        for s3_manifest in s3_manifests:
+            s3_manifest['full-video-source-ref'] = \
+                    s3_full_videos[s3_manifest['experiment-id']]
 
         # upload the manifest
-        tfile = tempfile.NamedTemporaryFile()
-        utils.manifest_file_from_jsons(tfile.name, s3_manifests)
+        utils.manifest_file_from_jsons(
+                self.args['local_s3_manifest_copy'],
+                s3_manifests)
+        self.logger.info("wrote local s3 manifest copy "
+                         f"{self.args['local_s3_manifest_copy']}")
         # NOTE: the docs for SageMaker GroundTruth specify a JSON Lines format
         # but, throws an error with the .jsonl extension
         # setting here to .json extension to resolve the error.
-        s3_manifest = utils.upload_file(
-                tfile.name,
+        client = utils.ConfiguredUploadClient(**self.args['client_config'])
+        result = utils.upload_file(
+                client,
+                self.args['local_s3_manifest_copy'],
                 self.args['s3_bucket_name'],
                 key=prefix + "/manifest.json")
-        self.logger.info(f"uploaded {s3_manifest}")
-        tfile.close()
+        self.logger.info(
+                f"uploaded {utils.s3_uri(result['bucket'], result['key'])}")
+        upload_responses.append(result)
+
+        # cleanup attempt
+        success, failed = utils.sort_upload_results(upload_responses)
+        if len(failed) != 0:
+            self.logger.warning(f"attempting to clean up {len(failed)} "
+                                "failed uploads")
+            cleanup_args = []
+            for r in failed:
+                cleanup_args.append(dict(r))
+                cleanup_args[-1].pop('response')
+            result = utils.upload_files(client, cleanup_args)
+            upload_responses = success + result
+            success, failed = utils.sort_upload_results(upload_responses)
+
+        self.logger.info(f"{len(success)} uploads succeeded")
+        if len(failed) != 0:
+            self.logger.warning(f"{len(failed)} uploads failed")
+
+        self.output(
+                {
+                    'successful_uploads': success,
+                    'failed_uploads': failed,
+                    'local_s3_manifest_copy':
+                        self.args['local_s3_manifest_copy']
+                        },
+                indent=2)
+
+        time_end = datetime.datetime.now()
+        self.logger.info("upload job\n"
+                         f"started : {time_start.isoformat()}\n"
+                         f"ended   : {time_end.isoformat()} ")
 
 
 if __name__ == "__main__":  # pragma: no cover

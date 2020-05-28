@@ -1,10 +1,11 @@
 import pytest
-from unittest.mock import MagicMock
 import boto3
+from unittest.mock import MagicMock, patch
 from moto import mock_s3
 import os
 import slapp.transfers.upload as up
 import json
+import botocore
 
 
 @pytest.fixture
@@ -58,21 +59,64 @@ def mock_manifest(tmpdir_factory):
 def bucket():
     with mock_s3():
         bucket_name = 'mybucket'
+        boto3.setup_default_session()
         conn = boto3.resource('s3')
         conn.create_bucket(Bucket=bucket_name)
         yield bucket_name
 
 
+orig = botocore.client.BaseClient._make_api_call
+
+
+def mock_make_api_call(self, operation_name, kwarg):
+    if operation_name == 'PutObject':
+        response = {
+                    'ResponseMetadata': {
+                        'HTTPStatusCode': 500
+                        }}
+        return response
+    return orig(self, operation_name, kwarg)
+
+
+def test_failed_upload(mock_db_conn_fixture, bucket, tmp_path, mock_manifest):
+    """makes all put_objects return HTTPStatusCode != 200 to check that
+    the output_json logs them all as failed uploads
+    """
+    output_json_path = tmp_path / "output.json"
+    args = {
+            's3_bucket_name': bucket,
+            'prefix': 'abc/def',
+            'output_json': str(output_json_path),
+            'manifest_file': mock_manifest,
+            }
+    with patch(
+            'botocore.client.BaseClient._make_api_call',
+            mock_make_api_call):
+        ldu = up.LabelDataUploader(input_data=args, args=[])
+        ldu.run(mock_db_conn_fixture)
+
+    with open(output_json_path, 'r') as f:
+        j = json.load(f)
+    assert 'successful_uploads' in j
+    assert 'failed_uploads' in j
+    assert 'local_s3_manifest_copy' in j
+    assert len(j['failed_uploads']) == 8
+    assert len(j['successful_uploads']) == 0
+
+
 @pytest.mark.parametrize("timestamp,manifest", [
     (True, None),
     (False, None),
-    (False, True)])
+    (False, True)
+    ])
 def test_LabelDataUploader(mock_db_conn_fixture, bucket, timestamp, manifest,
-                           mock_manifest):
+                           mock_manifest, tmp_path):
+    output_json_path = tmp_path / "output.json"
     args = {
             's3_bucket_name': bucket,
             'timestamp': timestamp,
             'prefix': 'abc/def',
+            'output_json': str(output_json_path)
             }
     if manifest:
         args.update({"manifest_file": mock_manifest})
@@ -114,3 +158,12 @@ def test_LabelDataUploader(mock_db_conn_fixture, bucket, timestamp, manifest,
     for f in files_in_s3:
         dname = os.path.dirname(f)
         assert dname == expected
+
+    # check the output json
+    with open(output_json_path, 'r') as f:
+        j = json.load(f)
+    assert 'successful_uploads' in j
+    assert 'failed_uploads' in j
+    assert 'local_s3_manifest_copy' in j
+    assert len(j['failed_uploads']) == 0
+    assert len(j['successful_uploads']) == 8
