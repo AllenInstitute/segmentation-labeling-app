@@ -38,7 +38,8 @@ def read_jsonlines(
     file, given a uri (s3 uri or local filepath).
     """
     if str(uri).startswith("s3://"):
-        data = s3_get_object(uri)["Body"].iter_lines(chunk_size=8192)    # The lines can be big        # noqa
+        # chunked because the lines can be big
+        data = s3_get_object(uri)["Body"].iter_lines(chunk_size=8192)
         reader = jsonlines.Reader(data)
     else:
         data = open(uri, "rb")
