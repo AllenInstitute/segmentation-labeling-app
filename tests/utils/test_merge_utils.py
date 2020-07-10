@@ -43,9 +43,9 @@ def test_compute_majority_error():
                 },
                 r".*'-metadata' expecting 1 and only 1"),
                 ])
-def test_get_record_project_key_exceptions(record, exception_match):
+def test_get_project_key_exceptions(record, exception_match):
     with pytest.raises(mu.MergingException, match=exception_match):
-        mu.get_record_project_key(record)
+        mu.get_project_key(record)
 
 
 @pytest.mark.parametrize(
@@ -58,12 +58,12 @@ def test_get_record_project_key_exceptions(record, exception_match):
                     'myproject': 'stuff'
                 },
                 "myproject")])
-def test_get_record_project_key(record, expected):
-    assert mu.get_record_project_key(record) == expected
+def test_get_project_key(record, expected):
+    assert mu.get_project_key(record) == expected
 
 
 @pytest.mark.parametrize(
-        "record_project1, record_project2, expected",
+        "project1, project2, expected",
         [
             (
                 {
@@ -105,21 +105,20 @@ def test_get_record_project_key(record, expected):
                             "roiLabel": "not cell"
                             }]
                         })])
-def test_merge_record(record_project1, record_project2, expected):
+def test_merge_record(project1, project2, expected):
     """keeping this file short and testing 2 functions at
     once with the same parameters
     """
-    assert expected == mu.merge_record_projects(record_project1,
-                                                record_project2)
+    assert expected == mu.merge_projects(project1, project2)
 
     record1 = {
             'roi-id': 1234,
-            'project1': record_project1,
+            'project1': project1,
             'project1-metadata': {'job-name': 'job1'}
             }
     record2 = {
             'roi-id': 1234,
-            'project2': record_project2,
+            'project2': project2,
             'project2-metadata': {'job-name': 'job2'}
             }
     expected_record = {
@@ -178,7 +177,7 @@ def two_jobs(tmpdir_factory):
         if len(annotations1) != 0:
             record1 = {
                 'roi-id': irecord,
-                'myproject': mu.RecordProject(
+                'myproject': mu.Project(
                     sourceData='123',
                     majorityLabel=job1_majority[irecord],
                     workerAnnotations=annotations1),
@@ -189,7 +188,7 @@ def two_jobs(tmpdir_factory):
         if len(annotations2) != 0:
             record2 = {
                 'roi-id': irecord,
-                'myproject': mu.RecordProject(
+                'myproject': mu.Project(
                     sourceData='123',
                     majorityLabel=job2_majority[irecord],
                     workerAnnotations=annotations2),
@@ -199,7 +198,7 @@ def two_jobs(tmpdir_factory):
 
         expected_job.append({
             'roi-id': irecord,
-            'merged-project': mu.RecordProject(
+            'merged-project': mu.Project(
                 sourceData='123',
                 majorityLabel=expected_majority[irecord],
                 workerAnnotations=expected_annotations),
