@@ -21,7 +21,7 @@ class WorkerAnnotation(TypedDict):
     roiLabel: str
 
 
-class RecordProject(TypedDict):
+class Project(TypedDict):
     sourceData: str
     majorityLabel: str
     workerAnnotations: List[WorkerAnnotation]
@@ -60,7 +60,7 @@ def compute_majority(labels: list) -> Union[Any, None]:
     return majority
 
 
-def get_record_project_key(record: dict) -> Union[str, None]:
+def get_project_key(record: dict) -> Union[str, None]:
     """returns the key name for the project, performs some validation
 
     Parameters
@@ -96,26 +96,25 @@ def get_record_project_key(record: dict) -> Union[str, None]:
     return project_key
 
 
-def merge_record_projects(project1: RecordProject,
-                          project2: RecordProject) -> RecordProject:
+def merge_projects(project1: Project, project2: Project) -> Project:
     """merges worker annotations between 2 record project entries and updates
     majorityLabel
 
     Parameters
     ----------
-    project1: RecordProject
+    project1: Project
         first project to merge
-    project2: RecordProject
+    project2: Project
         second project to merge
 
     Returns
     -------
-    new_project: RecordProject
+    new_project: Project
         new with workerAnnotations concatenated and sourceData appended
         if different. Any other entities inherited from project1
 
     """
-    new_project = RecordProject(copy.deepcopy(project1))
+    new_project = Project(copy.deepcopy(project1))
     new_project['workerAnnotations'].extend(project2['workerAnnotations'])
     if new_project['sourceData'] != project2['sourceData']:
         new_project['sourceData'] += ' ' + project2['sourceData']
@@ -143,9 +142,9 @@ def merge_records(record1: dict, record2: dict) -> dict:
     new_record = copy.deepcopy(record1)
 
     # merge the annotations
-    pk1 = get_record_project_key(record1)
-    pk2 = get_record_project_key(record2)
-    new_project = merge_record_projects(record1[pk1], record2[pk2])
+    pk1 = get_project_key(record1)
+    pk2 = get_project_key(record2)
+    new_project = merge_projects(record1[pk1], record2[pk2])
     new_record[pk1] = new_project
 
     return new_record
@@ -180,7 +179,7 @@ def merge_outputs(src_uris: List[Union[str, Path]],
         nused[str(src_uri)] = 0
         for record in reader:
             # some light validation on every record
-            pkey = get_record_project_key(record)
+            pkey = get_project_key(record)
             if pkey is None:
                 nskipped[str(src_uri)] += 1
                 continue
@@ -192,7 +191,7 @@ def merge_outputs(src_uris: List[Union[str, Path]],
                 record = merge_records(htable[record['roi-id']], record)
 
             # homogenize key names across the output
-            pkey = get_record_project_key(record)
+            pkey = get_project_key(record)
             record[new_project_key] = record.pop(pkey)
             mkey = pkey + '-metadata'
             new_meta_key = new_project_key + '-metadata'
