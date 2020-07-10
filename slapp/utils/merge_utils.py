@@ -1,4 +1,4 @@
-from typing import List, Union, Optional, TypedDict
+from typing import List, Union, Optional, TypedDict, Any
 from pathlib import Path
 import copy
 import jsonlines
@@ -27,8 +27,21 @@ class RecordProject(TypedDict):
     workerAnnotations: List[WorkerAnnotation]
 
 
-def compute_majority(labels):
-    """return majority labels or None if tied
+def compute_majority(labels: list) -> Union[Any, None]:
+    """most prevalent of three labels or None if not 3
+
+    Parameters
+    ----------
+    labels: list
+        items could be for example "cell"/"not cell" or 1/0
+        our SagemakerGroundTruth jobs are using the strings
+
+    Returns
+    -------
+    majority:
+       element of labels that is most prevalent or None if
+       lenght of labels is not 3
+
     """
     ulabels = set(labels)
     if len(ulabels) not in [1, 2]:
@@ -47,8 +60,19 @@ def compute_majority(labels):
     return majority
 
 
-def get_record_project_key(record: dict):
-    """performs minimal validation on a record so that it can be merged
+def get_record_project_key(record: dict) -> Union[str, None]:
+    """returns the key name for the project, performs some validation
+
+    Parameters
+    ----------
+    record: dict
+        the dictionary provided
+
+    Returns
+    -------
+    project_key: str
+       the key containing the project sub-dict or None if validation fails
+
     """
     # check that is identified
     if 'roi-id' not in record:
@@ -76,6 +100,20 @@ def merge_record_projects(project1: RecordProject,
                           project2: RecordProject) -> RecordProject:
     """merges worker annotations between 2 record project entries and updates
     majorityLabel
+
+    Parameters
+    ----------
+    project1: RecordProject
+        first project to merge
+    project2: RecordProject
+        second project to merge
+
+    Returns
+    -------
+    new_project: RecordProject
+        new with workerAnnotations concatenated and sourceData appended
+        if different. Any other entities inherited from project1
+
     """
     new_project = RecordProject(copy.deepcopy(project1))
     new_project['workerAnnotations'].extend(project2['workerAnnotations'])
@@ -87,6 +125,20 @@ def merge_record_projects(project1: RecordProject,
 def merge_records(record1: dict, record2: dict) -> dict:
     """merge 2 records, maintaining project and job key names from
     record1
+
+    Parameters
+    ----------
+    record1: dict
+        first record to merge
+    record2: dict
+        second record to merge
+
+    Returns
+    -------
+    new_record: dict
+        merged record. new_record['Project'] is merged. Everything else
+        inherits from record1.
+
     """
     new_record = copy.deepcopy(record1)
 
