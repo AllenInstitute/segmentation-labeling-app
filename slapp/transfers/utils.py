@@ -1,5 +1,6 @@
 import botocore.session
 import botocore.config
+from botocore.exceptions import ClientError
 import pathlib
 import jsonlines
 from typing import Union, List, TypedDict, Tuple, Generator
@@ -8,6 +9,7 @@ import base64
 import numpy as np
 import boto3
 from urllib.parse import urlparse
+import logging
 
 
 def s3_get_object(uri: str) -> dict:
@@ -27,7 +29,13 @@ def s3_get_object(uri: str) -> dict:
     parsed_s3 = urlparse(uri)
     bucket = parsed_s3.netloc
     file_key = parsed_s3.path[1:]
-    response = s3.get_object(Bucket=bucket, Key=file_key)
+    try:
+        response = s3.get_object(Bucket=bucket, Key=file_key)
+    except ClientError as ex:
+        if ex.response['Error']['Code'] == 'NoSuchKey':
+            logging.error(ex.response)
+        raise(ex)
+
     return response
 
 

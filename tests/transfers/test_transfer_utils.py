@@ -3,6 +3,7 @@ import pytest
 import slapp.transfers.utils as utils
 import json
 import boto3
+from botocore.exceptions import ClientError
 from moto import mock_s3
 import pathlib
 import numpy as np
@@ -20,6 +21,15 @@ def test_s3_get_object():
     # Run the test
     response = utils.s3_get_object("s3://mybucket/my/file.json")
     assert body == response["Body"].read()
+
+
+@mock_s3
+def test_s3_get_object_failure():
+    s3 = boto3.client("s3")
+    s3.create_bucket(Bucket="mybucket")
+
+    with pytest.raises(ClientError):
+        utils.s3_get_object("s3://mybucket/does/not/exist")
 
 
 @pytest.mark.parametrize(
