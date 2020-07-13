@@ -7,30 +7,6 @@ import slapp.utils.merge_utils as mu
 
 
 @pytest.mark.parametrize(
-        "labels, expected",
-        [
-            # not 3 annotations
-            ([0, 0, 0, 1, 1], None),
-            # 3 annotations
-            ([0, 0, 1], 0),
-            ([0, 1, 1], 1),
-            # works with strings
-            (['a', 'b', 'a'], 'a'),
-            (['a', 'b', 'b'], 'b'),
-            # works with unanimity
-            (['a', 'a', 'a'], 'a')])
-def test_compute_majority(labels, expected):
-    majority = mu.compute_majority(labels)
-    assert majority == expected
-
-
-def test_compute_majority_error():
-    with pytest.raises(ValueError,
-                       match=r".*expects binary classification.*"):
-        mu.compute_majority(['a', 'b', 'c'])
-
-
-@pytest.mark.parametrize(
         "record, exception_match",
         [
             # need an roi-id key
@@ -133,7 +109,7 @@ def test_merge_record(project1, project2, expected):
 @pytest.fixture(scope='module')
 def two_jobs(tmpdir_factory):
     """makes a list of jsons representative of 2 jobs
-       labels are [0, 1]
+       labels are "cell" and "not cell" and None if missing
     """
     x = -1  # easier to read tables below, indicates no label from worker
     workers_job1 = [
@@ -155,6 +131,16 @@ def two_jobs(tmpdir_factory):
     expected_majority = \
             [0, 1, 0, 0, 1, 1, 0, 1]  # noqa
 
+    # labels coming out of our jobs are str
+    translator = {1: "cell", 0: "not cell", -1: None}
+    for label in [workers_job1, workers_job2, expected]:
+        for i, v1 in enumerate(label):
+            for j, v2 in enumerate(v1):
+                label[i][j] = translator[v2]
+    for label in [job1_majority, job2_majority, expected_majority]:
+        for i, v in enumerate(label):
+            label[i] = translator[v]
+
     job1 = []
     job2 = []
     expected_job = []
@@ -164,11 +150,11 @@ def two_jobs(tmpdir_factory):
         expected_annotations = []
         for iworker in range(3):
             w1 = workers_job1[iworker][irecord]
-            if w1 != -1:
+            if w1 is not None:
                 annotations1.append(
                     mu.WorkerAnnotation(workerId=iworker, roiLabel=w1))
             w2 = workers_job2[iworker][irecord]
-            if w2 != -1:
+            if w2 is not None:
                 annotations2.append(
                     mu.WorkerAnnotation(workerId=iworker, roiLabel=w2))
             expected_annotations.append(
@@ -222,6 +208,10 @@ def test_merge_outputs(two_jobs):
     """tests that the merge merges as expected. Output not sent to disk or bucket
     """
     jpath1, jpath2, expected = two_jobs
+    import json
+    for jp in [jpath1, jpath2]:
+        jl = list(mu.read_jsonlines(jp))
+        print(json.dumps(jl, indent=2))
 
     merged = mu.merge_outputs(src_uris=[jpath1, jpath2])
 

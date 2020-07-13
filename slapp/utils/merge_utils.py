@@ -1,4 +1,4 @@
-from typing import List, Union, Optional, TypedDict, Any
+from typing import List, Union, Optional, TypedDict
 from pathlib import Path
 import copy
 import jsonlines
@@ -10,6 +10,7 @@ import logging
 import json
 
 from slapp.transfers.utils import read_jsonlines
+from slapp.lambdas.post_annotation import compute_majority
 
 
 class MergingException(Exception):
@@ -25,39 +26,6 @@ class Project(TypedDict):
     sourceData: str
     majorityLabel: str
     workerAnnotations: List[WorkerAnnotation]
-
-
-def compute_majority(labels: list) -> Union[Any, None]:
-    """most prevalent of three labels or None if not 3
-
-    Parameters
-    ----------
-    labels: list
-        items could be for example "cell"/"not cell" or 1/0
-        our SagemakerGroundTruth jobs are using the strings
-
-    Returns
-    -------
-    majority:
-       element of labels that is most prevalent or None if
-       lenght of labels is not 3
-
-    """
-    ulabels = set(labels)
-    if len(ulabels) not in [1, 2]:
-        raise ValueError("`compute_majority()` expects binary classification "
-                         f"but received {len(ulabels)} labels: {ulabels}")
-    counts = {ulabel: labels.count(ulabel) for ulabel in ulabels}
-
-    majority = None
-
-    # require 3 and only 3 annotations
-    if sum(counts.values()) == 3:
-        mcount = max(counts.values())
-        r_counts = {v: k for k, v in counts.items()}
-        majority = r_counts[mcount]
-
-    return majority
 
 
 def get_project_key(record: dict) -> Union[str, None]:
@@ -153,7 +121,8 @@ def merge_records(record1: dict, record2: dict) -> dict:
 def merge_outputs(src_uris: List[Union[str, Path]],
                   dst_uri: Optional[Union[str, Path]] = None,
                   new_project_key: Optional[str] = "merged-project",
-                  new_job_name: Optional[str] = "merged-job") -> dict:
+                  new_job_name: Optional[str] = "merged-job",
+                  exact_nlabels: Optional[int] = 3) -> dict:
     """merge outputs from multiple labeling jobs
 
     Parameters
@@ -162,6 +131,13 @@ def merge_outputs(src_uris: List[Union[str, Path]],
         source labeling job outputs to merge
     dst_uri: s3 uri or local filepath
         destination uri. If none (default), not written.
+    new_project_key: str
+        merged project key in returned records will be this str
+    new_job_name: str
+        job name in returned records will be this str
+    exact_nlabels: int
+        if the number of labels is not this number, the majority
+        label will be set to None
 
     Returns
     -------
@@ -210,10 +186,14 @@ def merge_outputs(src_uris: List[Union[str, Path]],
 
     # set the majority label
     nvalid = 0
+    # translate back to the inputs compute_majority expects
+    translator = {"cell": 1, "not cell": 0}
     for record in merged:
         labels = [i['roiLabel']
                   for i in record[new_project_key]['workerAnnotations']]
-        majority = compute_majority(labels)
+        print(labels)
+        labels = [translator[i] for i in labels]
+        majority = compute_majority(labels, exact_len=exact_nlabels)
         record[new_project_key]['majorityLabel'] = majority
         if majority is not None:
             nvalid += 1
