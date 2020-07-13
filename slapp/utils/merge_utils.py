@@ -198,7 +198,6 @@ def merge_outputs(src_uris: List[Union[str, Path]],
     for record in merged:
         labels = [i['roiLabel']
                   for i in record[new_project_key]['workerAnnotations']]
-        print(labels)
         labels = [translator[i] for i in labels]
         majority = compute_majority(labels, exact_len=exact_nlabels)
         record[new_project_key]['majorityLabel'] = majority
