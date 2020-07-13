@@ -3,10 +3,72 @@ import pytest
 import slapp.transfers.utils as utils
 import json
 import boto3
+from botocore.exceptions import ClientError
 from moto import mock_s3
 import pathlib
 import numpy as np
 import string
+
+
+@mock_s3
+def test_s3_get_object():
+    # Set up the fake bucket and object
+    s3 = boto3.client("s3")
+    s3.create_bucket(Bucket="mybucket")
+    body = b'{"a": 1}\n{"b": 2}'
+    s3.put_object(Bucket="mybucket", Key="my/file.json",
+                  Body=body)
+    # Run the test
+    response = utils.s3_get_object("s3://mybucket/my/file.json")
+    assert body == response["Body"].read()
+
+
+@mock_s3
+def test_s3_get_object_failure():
+    s3 = boto3.client("s3")
+    s3.create_bucket(Bucket="mybucket")
+
+    with pytest.raises(ClientError):
+        utils.s3_get_object("s3://mybucket/does/not/exist")
+
+
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        (b'{"a": 1, "b": 3}\n{"b": 2}', [{"a": 1, "b": 3}, {"b": 2}]),
+        (b'{"a": 1}', [{"a": 1}]),
+        (b'', []),
+    ]
+)
+def test_read_jsonlines_file(tmp_path, body, expected):
+    with open(tmp_path / "filename", "wb") as f:
+        f.write(body)
+    reader = utils.read_jsonlines(tmp_path / "filename")
+    response = []
+    for record in reader:
+        response.append(record)
+    assert expected == response
+
+
+@mock_s3
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        (b'{"a": 1, "b": 3}\n{"b": 2}', [{"a": 1, "b": 3}, {"b": 2}]),
+        (b'{"a": 1}', [{"a": 1}]),
+        (b'', []),
+    ]
+)
+def test_read_jsonlines_s3(body, expected):
+    s3 = boto3.client("s3")
+    s3.create_bucket(Bucket="mybucket")
+    s3.put_object(Bucket="mybucket", Key="my/file.json",
+                  Body=body)
+    reader = utils.read_jsonlines("s3://mybucket/my/file.json")
+    response = []
+    for record in reader:
+        response.append(record)
+    assert expected == response
 
 
 @pytest.fixture(scope='module')

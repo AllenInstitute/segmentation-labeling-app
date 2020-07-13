@@ -1,11 +1,60 @@
 import botocore.session
 import botocore.config
+from botocore.exceptions import ClientError
 import pathlib
 import jsonlines
-from typing import Union, List, TypedDict, Tuple
+from typing import Union, List, TypedDict, Tuple, Generator
 import hashlib
 import base64
 import numpy as np
+import boto3
+from urllib.parse import urlparse
+import logging
+
+
+def s3_get_object(uri: str) -> dict:
+    """
+    Utility wrapper for calling get_object from the boto3 s3 client,
+    using an s3 URI directly (rather than having to parse the bucket
+    and key)
+    Parameters
+    ==========
+    uri: str
+        Location of the s3 file object
+    Returns
+    =======
+    Dict containing response from boto3 s3 client
+    """
+    s3 = boto3.client("s3")
+    parsed_s3 = urlparse(uri)
+    bucket = parsed_s3.netloc
+    file_key = parsed_s3.path[1:]
+    try:
+        response = s3.get_object(Bucket=bucket, Key=file_key)
+    except ClientError as ex:
+        if ex.response['Error']['Code'] == 'NoSuchKey':
+            logging.error(ex.response)
+        raise(ex)
+
+    return response
+
+
+def read_jsonlines(
+        uri: Union[str, pathlib.Path]) -> Generator[dict, None, None]:
+    """
+    Generator to load jsonlines file from either s3 or a local
+    file, given a uri (s3 uri or local filepath).
+    """
+    if str(uri).startswith("s3://"):
+        # chunked because the lines can be big
+        data = s3_get_object(uri)["Body"].iter_lines(chunk_size=8192)
+        reader = jsonlines.Reader(data)
+    else:
+        data = open(uri, "rb")
+        reader = jsonlines.Reader(data)
+    for record in reader:
+        yield record
+    reader.close()
 
 
 class UploadResult(TypedDict):
