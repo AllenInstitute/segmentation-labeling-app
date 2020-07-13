@@ -29,7 +29,8 @@ class Project(TypedDict):
 
 
 def get_project_key(record: dict) -> Union[str, None]:
-    """returns the key name for the project, performs some validation
+    """returns the key name for the project, performs some validation.
+    See Notes.
 
     Parameters
     ----------
@@ -40,6 +41,12 @@ def get_project_key(record: dict) -> Union[str, None]:
     -------
     project_key: str
        the key containing the project sub-dict or None if validation fails
+
+    Notes
+    -----
+    SagemakerGroundTruth returns a dictionary where 2 keys "<project>" and
+    "<project>-metadata" are dynamically named by the name of the launched
+    labeling job.
 
     """
     # check that is identified
