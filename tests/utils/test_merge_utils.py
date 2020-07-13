@@ -46,10 +46,16 @@ def test_get_project_key(record, expected):
                     'sourceData': 's3URI1',
                     'majorityLabel': 'cell',
                     'workerAnnotations': [
+                        # repeat will not be duplicated
                         {
                             "workerId": "idA1",
                             "roiLabel": "cell"
-                            }]
+                            },
+                        {
+                            "workerId": "idA2",
+                            "roiLabel": "not cell"
+                            },
+                        ]
                         },
                 {
                     'sourceData': 's3URI2',
