@@ -4,6 +4,7 @@ import boto3
 from moto import mock_s3
 
 from slapp.lambdas.post_annotation import lambda_handler as post_lambda
+from slapp.lambdas.post_annotation import compute_majority
 
 
 consolidation_request = {
@@ -30,6 +31,38 @@ def s3_bucket(scope="function"):
                                "consolidation_payload.json")
     yield
     mock.stop()
+
+
+@pytest.mark.parametrize(
+        "labels, exact, expected",
+        [
+            ([0], None, "not cell"),
+            ([1], None, "cell"),
+            ([1], 1, "cell"),
+            ([1], 2, None),
+            ([0, 0], None, "not cell"),
+            ([1, 1], None, "cell"),
+            # asking for exactly 2
+            ([1, 1], 2, "cell"),
+            # asking for exactly 3
+            ([1, 1], 3, None),
+            ([0, 1], None, None),
+            ([0, 0, 0], None, 'not cell'),
+            ([0, 0, 1], None, 'not cell'),
+            ([1, 0, 1], None, 'cell'),
+            ([1, 0, 1], 3, 'cell'),
+            # asking for exactly 2
+            ([1, 0, 1], 2, None),
+            # asking for exactly 4
+            ([1, 0, 1], 4, None),
+            ([True, False, True], None, 'cell'),
+            ([1, 1, 1], None, 'cell'),
+            ([1, 1, 0, 0], None, None),
+            ([1, 1, 1, 0], None, "cell"),
+            ([1, 0, 0, 0], None, "not cell"),
+            ])
+def test_compute_majority(labels, exact, expected):
+    assert expected == compute_majority(labels, exact_len=exact)
 
 
 def test_post_annotation_lambda(s3_bucket):
