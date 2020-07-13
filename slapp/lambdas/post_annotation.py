@@ -3,7 +3,7 @@ import boto3
 from urllib.parse import urlparse
 import math
 import logging
-from typing import List, Union
+from typing import List, Union, Optional
 
 
 logger = logging.getLogger()
@@ -98,7 +98,9 @@ def lambda_handler(event, context) -> dict:
     return consolidated_labels
 
 
-def compute_majority(labels: List[Union[int, bool]]) -> Union[str, None]:
+def compute_majority(labels: List[Union[int, bool]],
+                     exact_len: Optional[int] = None) -> Union[str, None]:
+
     """computes majority label. None if tied
 
     Parameters
@@ -108,12 +110,18 @@ def compute_majority(labels: List[Union[int, bool]]) -> Union[str, None]:
         1 = True = "cell"
         0 = False = "not cell"
 
+    exact_len: int or None
+        if not None, will return None if len(labels) does not match this
+        value
+
     Returns
     -------
     majority: str
         "cell", "not cell", or None if tied
     """
     label_count = len(labels)
+    if (exact_len is not None) & (exact_len != label_count):
+        return None
 
     threshold = math.ceil(label_count/2)
     yeas = sum(labels)
