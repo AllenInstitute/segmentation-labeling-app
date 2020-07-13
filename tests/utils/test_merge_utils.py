@@ -65,7 +65,7 @@ def test_get_project_key(record, expected):
                             }]
                         },
                 {
-                    'sourceData': 's3URI1 s3URI2',
+                    'sourceData': 's3URI1,s3URI2',
                     'majorityLabel': 'cell',  # just inherits from 1st one
                     'workerAnnotations': [
                         {

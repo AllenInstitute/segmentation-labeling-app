@@ -85,7 +85,7 @@ def merge_projects(project1: Project, project2: Project) -> Project:
     new_project = Project(copy.deepcopy(project1))
     new_project['workerAnnotations'].extend(project2['workerAnnotations'])
     if new_project['sourceData'] != project2['sourceData']:
-        new_project['sourceData'] += ' ' + project2['sourceData']
+        new_project['sourceData'] += ',' + project2['sourceData']
     return new_project
 
 
