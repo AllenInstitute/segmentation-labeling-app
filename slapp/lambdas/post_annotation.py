@@ -98,7 +98,7 @@ def lambda_handler(event, context) -> dict:
     return consolidated_labels
 
 
-def compute_majority(labels: List[Union[int, bool]]) -> str:
+def compute_majority(labels: List[Union[int, bool]]) -> Union[str, None]:
     """computes majority label. None if tied
 
     Parameters
