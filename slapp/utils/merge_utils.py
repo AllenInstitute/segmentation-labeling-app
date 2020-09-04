@@ -1,4 +1,4 @@
-from typing import List, Union, Optional, TypedDict
+from typing import List, Union, Optional
 from pathlib import Path
 import copy
 import jsonlines
@@ -8,9 +8,15 @@ import tempfile
 import shutil
 import logging
 import json
+import sys
 
 from slapp.transfers.utils import read_jsonlines
 from slapp.lambdas.post_annotation import compute_majority
+
+if sys.version_info >= (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 
 class MergingException(Exception):
