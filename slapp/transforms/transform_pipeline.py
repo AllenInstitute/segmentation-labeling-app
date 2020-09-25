@@ -1,8 +1,11 @@
 import datetime
+import h5py
 import json
+import jsonlines
 import multiprocessing
 import os
 from pathlib import Path
+from typing import List, Tuple
 
 import argschema
 import imageio
@@ -10,7 +13,7 @@ import marshmallow as mm
 import numpy as np
 
 import slapp.utils.query_utils as query_utils
-from slapp.rois import ROI
+from slapp.rois import ROI, coo_from_lims_style
 from slapp.transforms.video_utils import (downsample_h5_video,
                                           transform_to_webm)
 from slapp.transforms.array_utils import (
@@ -31,10 +34,18 @@ class TransformPipelineException(Exception):
 
 class TransformPipelineSchema(argschema.ArgSchema):
     segmentation_run_id = argschema.fields.Int(
-        required=True,
+        required=False,
         description=("which segmentation_run_id to transform. "
                      "If not provided, will attempt to query using args: "
                      "ophys_experiment_id, ophys_segmentation_commit_hash."))
+    prod_segmentation_run_manifest = argschema.fields.InputFile(
+        required=False,
+        description=("A field which allows for a slapp manifest to be created "
+                     "from a production segmentation run.")
+    )
+    output_manifest = argschema.fields.OutputFile(
+        required=False,
+        description="output path for jsonlines manifest contents")
     ophys_experiment_id = argschema.fields.Int(
         required=False,
         description=("used as a query filter if "
@@ -147,6 +158,10 @@ class TransformPipelineSchema(argschema.ArgSchema):
         """if segmentation_run_id not provided, query the database
         using the other provided args
         """
+        # If we already have a prod manifest no need to query DB
+        if "prod_segmentation_run_manifest" in data:
+            return data
+
         if "segmentation_run_id" not in data:
             if not all(i in data for i in [
                     "ophys_experiment_id",
@@ -179,30 +194,110 @@ class TransformPipelineSchema(argschema.ArgSchema):
         return data
 
 
+def xform_from_slapp_db(db_conn: query_utils.DbConnection,
+                        segmentation_run_id: int) -> Tuple[List[ROI], Path]:
+
+    # get all ROI ids from this segmentation run
+    query_string = ("SELECT id FROM rois WHERE segmentation_run_id="
+                    f"{segmentation_run_id}")
+    entries = db_conn.query(query_string)
+    roi_ids = [i['id'] for i in entries]
+
+    rois = [ROI.roi_from_query(roi_id, db_conn) for roi_id in roi_ids]
+
+    query_string = ("SELECT * FROM segmentation_runs "
+                    f"WHERE id={segmentation_run_id}")
+    seg_query = db_conn.query(query_string)[0]
+
+    return (rois, Path(seg_query['source_video_path']))
+
+
+class ProdSegmentationRunManifestSchema(mm.Schema):
+    experiment_id = mm.fields.Int(required=True)
+    binarized_rois_path = argschema.fields.InputFile(required=True)
+    # TODO: Consider using H5InputFile field from ophys_etl_pipelines
+    traces_h5_path = mm.fields.Str(required=True)
+    # TODO: Consider using H5InputFile field from ophys_etl_pipelines
+    movie_path = argschema.fields.Str(required=True)
+    local_to_global_roi_id_map = mm.fields.Dict(required=True,
+                                                keys=mm.fields.Int(),
+                                                values=mm.fields.Int())
+
+    @mm.post_load
+    def load_rois(self, data, **kwargs) -> dict:
+        with open(data['binarized_rois_path'], 'r') as f:
+            data['binarized_rois'] = json.load(f)
+        return data
+
+    @mm.post_load
+    def get_movie_frame_shape(self, data, **kwargs) -> dict:
+        with h5py.File(data['movie_path'], 'r') as h5f:
+            data['movie_frame_shape'] = h5f['data'].shape[1:]
+        return data
+
+
+def xform_from_prod_manifest(prod_manifest_path: str
+                             ) -> Tuple[List[ROI], Path]:
+    with open(prod_manifest_path, 'r') as f:
+        prod_manifest = json.load(f)
+    prod_manifest = ProdSegmentationRunManifestSchema().load(prod_manifest)
+    id_map = prod_manifest['local_to_global_roi_id_map']
+
+    rois = []
+    for roi in prod_manifest['binarized_rois']:
+        if roi['id'] not in id_map:
+            # only make manifests for listed ROIs
+            continue
+
+        roi_stamp = coo_from_lims_style(
+                mask_matrix=roi['mask_matrix'],
+                xoffset=roi['x'],
+                yoffset=roi['y'],
+                shape=prod_manifest['movie_frame_shape'])
+
+        converted_roi_id = id_map[roi['id']]
+
+        with h5py.File(prod_manifest['traces_h5_path'], 'r') as h5f:
+            traces_id_order = list(h5f['roi_names'][:].astype(int))
+            roi_trace = h5f['data'][traces_id_order.index(roi['id'])]
+
+        converted_roi = ROI(coo_rows=roi_stamp.row,
+                            coo_cols=roi_stamp.col,
+                            coo_data=roi_stamp.data.astype('uint8'),
+                            image_shape=prod_manifest['movie_frame_shape'],
+                            experiment_id=prod_manifest['experiment_id'],
+                            roi_id=converted_roi_id,
+                            trace=roi_trace,
+                            is_binary=True)
+        rois.append(converted_roi)
+
+    return (rois, Path(prod_manifest['movie_path']))
+
+
 class TransformPipeline(argschema.ArgSchemaParser):
     default_schema = TransformPipelineSchema
 
     def run(self, db_conn: query_utils.DbConnection):
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-        output_dir = Path(self.args['artifact_basedir']) / \
-            f"seg_run_id_{self.args['segmentation_run_id']}" / \
-            self.timestamp
+
+        if 'prod_segmentation_run_manifest' in self.args:
+            rois, video_path = xform_from_prod_manifest(
+                prod_manifest_path=self.args['prod_segmentation_run_manifest']
+            )
+            output_dir = Path(self.args['artifact_basedir']) / \
+                self.timestamp
+        else:
+            rois, video_path = xform_from_slapp_db(
+                db_conn=db_conn,
+                segmentation_run_id=self.args['segmentation_run_id']
+            )
+            output_dir = Path(self.args['artifact_basedir']) / \
+                f"seg_run_id_{self.args['segmentation_run_id']}" / \
+                self.timestamp
         os.makedirs(output_dir, exist_ok=True)
 
-        # get all ROI ids from this segmentation run
-        query_string = ("SELECT id FROM rois WHERE segmentation_run_id="
-                        f"{self.args['segmentation_run_id']}")
-        entries = db_conn.query(query_string)
-        roi_ids = [i['id'] for i in entries]
-
-        rois = [ROI.roi_from_query(roi_id, db_conn) for roi_id in roi_ids]
-
-        # load and downsample the source video
-        query_string = ("SELECT * FROM segmentation_runs "
-                        f"WHERE id={self.args['segmentation_run_id']}")
-        seg_query = db_conn.query(query_string)[0]
         downsampled_video = downsample_h5_video(
-                Path(seg_query['source_video_path']),
+                video_path,
                 self.args['input_fps'],
                 self.args['output_fps'],
                 self.args['downsampling_strategy'],
@@ -251,6 +346,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
         # create the per-ROI artifacts
         insert_statements = []
+        manifests = []
         for roi in rois:
             # mask and outline from ROI class
             mask_path = output_dir / f"mask_{roi.roi_id}.png"
@@ -332,7 +428,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
             # manifest entry creation
             manifest = {}
-            manifest['experiment-id'] = seg_query['ophys_experiment_id']
+            manifest['experiment-id'] = roi.experiment_id
             manifest['roi-id'] = roi.roi_id
             manifest['source-ref'] = str(outline_path)
             manifest['roi-mask-source-ref'] = str(mask_path)
@@ -343,14 +439,21 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['trace-source-ref'] = str(trace_path)
             manifest['full-outline-source-ref'] = str(full_outline_path)
 
-            insert_str = insert_str_template.format(
-                    json.dumps(manifest),
-                    os.environ['TRANSFORM_HASH'],
-                    roi.roi_id)
+            if 'output_manifest' in self.args:
+                manifests.append(manifest)
+            else:
+                insert_str = insert_str_template.format(
+                        json.dumps(manifest),
+                        os.environ['TRANSFORM_HASH'],
+                        roi.roi_id)
 
-            insert_statements.append(insert_str)
+                insert_statements.append(insert_str)
 
-        db_conn.bulk_insert(insert_statements)
+        if 'output_manifest' in self.args:
+            with open(self.args['output_manifest'], "w") as fp:
+                jsonlines.Writer(fp).write_all(manifests)
+        else:
+            db_conn.bulk_insert(insert_statements)
 
 
 if __name__ == "__main__":  # pragma: no cover

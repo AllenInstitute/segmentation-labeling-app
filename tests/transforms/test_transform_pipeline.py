@@ -5,6 +5,7 @@ from functools import partial
 import os
 import numpy as np
 import json
+import h5py
 
 from slapp.transforms import transform_pipeline
 
@@ -31,11 +32,135 @@ def mock_roi():
     def mock_roi_from_query(roi_id, db_conn) -> MagicMock:
         mock_ROI = MagicMock()
         mock_ROI.roi_id = roi_id
+
+        roi = db_conn.query(f"SELECT * FROM rois WHERE id={roi_id}")[0]
+        segmentation_run = db_conn.query(
+            ("SELECT * FROM segmentation_runs WHERE "
+             f"id={roi['segmentation_run_id']}"))[0]
+
+        mock_ROI.experiment_id = segmentation_run['ophys_experiment_id']
         return mock_ROI
 
     mock_ROI = MagicMock()
     mock_ROI.roi_from_query.side_effect = mock_roi_from_query
     return mock_ROI
+
+
+@pytest.fixture
+def production_roi_manifest(tmp_path, request):
+    binarized = tmp_path / "mock_binary_rois.json"
+    with open(binarized, "w") as fp:
+        json.dump(request.param.get("binarized_content"), fp)
+    movie = tmp_path / "mock_movie.h5"
+    with h5py.File(movie, "w") as f:
+        f.create_dataset(
+                "data",
+                data=np.zeros(request.param.get("movie_shape")))
+    trace = tmp_path / "traces.h5"
+    if 'trace_content' in request.param:
+        with h5py.File(trace, "w") as f:
+            f.create_dataset(
+                    'data',
+                    data=request.param.get("trace_content")['trace'])
+            f.create_dataset(
+                    'roi_names',
+                    data=np.array(
+                        request.param.get(
+                            "trace_content")['names']).astype(np.string_),
+                    dtype=h5py.special_dtype(vlen=str))
+    manifest = {
+        'experiment_id': request.param.get("experiment_id"),
+        'binarized_rois_path': str(binarized),
+        'movie_path': str(movie),
+        'traces_h5_path': str(trace),
+        'local_to_global_roi_id_map': request.param.get("id_map")
+        }
+    yield manifest, request.param
+
+
+@pytest.mark.parametrize(
+    "production_roi_manifest",
+    [({
+        'binarized_content': {'some': 'thing'},
+        'movie_shape': (100, 10, 10),
+        'experiment_id': 1234,
+        'id_map': {1: 20002}
+        })],
+    indirect=["production_roi_manifest"])
+def test_ProdSegSchema(production_roi_manifest):
+    """tests that the schema retrieves movie shape and
+    the content of the binarized json file
+    """
+    manifest, params = production_roi_manifest
+    pschema = transform_pipeline.ProdSegmentationRunManifestSchema()
+    result = pschema.load(manifest)
+    print(json.dumps(result, indent=2))
+    assert result['experiment_id'] == params['experiment_id']
+    assert result['movie_frame_shape'] == params['movie_shape'][1:]
+    assert result['binarized_rois'] == params['binarized_content']
+
+
+@pytest.mark.parametrize(
+        "production_roi_manifest",
+        [(
+            {
+                'binarized_content': [
+                    {
+                        'id': 12,
+                        'mask_matrix': [[0, 0, 1, 0],
+                                        [0, 1, 1, 0],
+                                        [0, 1, 1, 0],
+                                        [0, 1, 0, 0]],
+                        'x': 100,
+                        'y': 130},
+                    {
+                        'id': 13,
+                        'mask_matrix': [[0, 0, 1, 0],
+                                        [0, 1, 1, 0],
+                                        [0, 1, 1, 0],
+                                        [0, 1, 0, 0]],
+                        'x': 70,
+                        'y': 30},
+                    {
+                        # this one will not make it through
+                        # to the returned rois list
+                        # because the id is not in the id_map
+                        'id': 14,
+                        'mask_matrix': [[0, 0, 1, 0],
+                                        [0, 1, 1, 0],
+                                        [0, 1, 1, 0],
+                                        [0, 1, 0, 0]],
+                        'x': 20,
+                        'y': 40}],
+                'trace_content': {
+                    'trace': [[10.2, 11.3, 12.4, 13.3, 14.2, 11.1],
+                              [1.0, 2.0, 1.3, 1.4, 3.4, 2.3]],
+                    'names': ['12', '13']},
+                'movie_shape': (100, 200, 200),
+                'experiment_id': 1234,
+                'id_map': {12: 200023, 13: 200024}}
+            )],
+        indirect=['production_roi_manifest'])
+def test_xform_from_prod_manifest(tmp_path, production_roi_manifest):
+    manifest, params = production_roi_manifest
+    man_path = tmp_path / "manifest.json"
+    with open(man_path, "w") as f:
+        json.dump(manifest, f)
+
+    rois, movie_path = transform_pipeline.xform_from_prod_manifest(man_path)
+    # one has been left out, because it is not in the id map
+    assert len(rois) == 2
+    # check that the ids have been translated
+    ids = set([i.roi_id for i in rois])
+    assert ids == set(list(params['id_map'].values()))
+
+    # check that the traces went to the correct ROI
+    reverse_map = {v: k for k, v in params['id_map'].items()}
+    for roi in rois:
+        local_id = reverse_map[roi.roi_id]
+        ind = params['trace_content']['names'].index(str(local_id))
+        np.testing.assert_array_equal(
+                roi.trace, params['trace_content']['trace'][ind])
 
 
 def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
@@ -73,6 +198,10 @@ def create_expected_manifest(experiment_id, roi_id, segmentation_run_id,
 
      {"SELECT id FROM rois WHERE segmentation_run_id=42": [
          {"id": 0}, {"id": 777}],
+      "SELECT * FROM rois WHERE id=0": [
+          {"segmentation_run_id": 42}],
+      "SELECT * FROM rois WHERE id=777": [
+          {"segmentation_run_id": 42}],
       "SELECT * FROM segmentation_runs WHERE id=42": [
          {"source_video_path": "/mock/path", "ophys_experiment_id": 123}
       ]},

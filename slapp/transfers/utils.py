@@ -3,13 +3,19 @@ import botocore.config
 from botocore.exceptions import ClientError
 import pathlib
 import jsonlines
-from typing import Union, List, TypedDict, Tuple, Generator
+from typing import Union, List, Tuple, Generator
 import hashlib
 import base64
 import numpy as np
 import boto3
 from urllib.parse import urlparse
 import logging
+import sys
+
+if sys.version_info >= (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 
 def s3_get_object(uri: str) -> dict:

@@ -261,3 +261,49 @@ def test_roi_generate_outline(weighted, full, expected, athresh, quantile):
             absolute_threshold=athresh,
             quantile=quantile)
     assert np.all(outline == expected)
+
+
+@pytest.mark.parametrize(
+        "mask_matrix, xoff, yoff, shape, expected",
+        [
+            (
+                [[True, False, True, False],
+                 [False, True, True, False],
+                 [False, True, True, False],
+                 [False, True, True, False]],
+                0, 0, None,
+                [[True, False, True],
+                 [False, True, True],
+                 [False, True, True],
+                 [False, True, True]]
+                ),
+            (
+                [[True, False, True, False],
+                 [False, True, True, False],
+                 [False, True, True, False],
+                 [False, True, True, False]],
+                0, 0, (6, 5),
+                [[True, False, True, False, False],
+                 [False, True, True, False, False],
+                 [False, True, True, False, False],
+                 [False, True, True, False, False],
+                 [False, False, False, False, False],
+                 [False, False, False, False, False]]
+                ),
+            (
+                [[True, False, True, False],
+                 [False, True, True, False],
+                 [False, True, True, False],
+                 [False, True, True, False]],
+                2, 1, (6, 5),
+                [[False, False, False, False, False],
+                 [False, False, True, False, True],
+                 [False, False, False, True, True],
+                 [False, False, False, True, True],
+                 [False, False, False, True, True],
+                 [False, False, False, False, False]]
+                ),
+            ])
+def test_coo_from_lims_style(mask_matrix, xoff, yoff, shape, expected):
+    coo = roi_module.coo_from_lims_style(mask_matrix, xoff, yoff, shape)
+    np.testing.assert_array_equal(coo.toarray(), np.array(expected))

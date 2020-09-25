@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 from scipy.sparse import coo_matrix
 import numpy as np
 import cv2
@@ -6,6 +6,41 @@ import cv2
 import slapp.utils.query_utils as query_utils
 from slapp.transforms.array_utils import (
         center_pad_2d, crop_2d_array)
+
+
+def coo_from_lims_style(mask_matrix: List[List[bool]],
+                        xoffset: int = 0,
+                        yoffset: int = 0,
+                        shape: Optional[Tuple] = None) -> coo_matrix:
+    """creates a coo matrix from a LIMS-style specification
+
+    Parameters
+    ----------
+    mask_matrix: list(list(bool))
+        boolean array of included pixels in bounding box of ROI
+    xoffset: int
+        column index of first pixel in mask_matrix
+    yoffset: int
+        row index of first pixel in mask_matrix
+    shape: tuple(int)
+        desired full-frame shape of coo_matrix. If left as default
+        None, then the coo_matrix will extend from (0, 0) to the
+        extent of the offset bounding box
+
+    Returns
+    -------
+    coo: coo_matrix
+        a scipy.sparse.coo_matrix
+
+    """
+    bounded = coo_matrix(mask_matrix)
+    bounded.row += yoffset
+    bounded.col += xoffset
+    # re-constructing allows easy passing of None to shape
+    coo = coo_matrix(
+            (bounded.data, (bounded.row, bounded.col)),
+            shape=shape)
+    return coo
 
 
 def binary_mask_from_threshold(
@@ -97,13 +132,15 @@ class ROI:
                  image_shape: Tuple[int, int],
                  experiment_id: int,
                  roi_id: int,
-                 trace: Union[np.array, List[float]]):
+                 trace: Union[np.array, List[float]],
+                 is_binary: bool = False):
         self.image_shape = image_shape
         self.experiment_id = experiment_id
         self.roi_id = roi_id
         self._sparse_coo = coo_matrix((coo_data, (coo_rows, coo_cols)),
                                       shape=image_shape)
         self.trace = trace
+        self.is_binary = is_binary
 
     @classmethod
     def roi_from_query(cls, roi_id: int,
@@ -186,10 +223,13 @@ class ROI:
             uint8 2D dense representation of the mask outline.
 
         """
-        binary = binary_mask_from_threshold(
-            self._sparse_coo,
-            absolute_threshold=absolute_threshold,
-            quantile=quantile)
+        if self.is_binary:
+            binary = self._sparse_coo.toarray()
+        else:
+            binary = binary_mask_from_threshold(
+                self._sparse_coo,
+                absolute_threshold=absolute_threshold,
+                quantile=quantile)
 
         contours, _ = cv2.findContours(binary,
                                        cv2.RETR_LIST,
