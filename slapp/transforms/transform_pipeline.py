@@ -300,13 +300,12 @@ class TransformPipeline(argschema.ArgSchemaParser):
                 self.timestamp
         os.makedirs(output_dir, exist_ok=True)
 
-        if not self.args['skip_movies']:
-            downsampled_video = downsample_h5_video(
-                    video_path,
-                    self.args['input_fps'],
-                    self.args['output_fps'],
-                    self.args['downsampling_strategy'],
-                    self.args['random_seed'])
+        downsampled_video = downsample_h5_video(
+                video_path,
+                self.args['input_fps'],
+                self.args['output_fps'],
+                self.args['downsampling_strategy'],
+                self.args['random_seed'])
 
         # strategy for normalization: normalize entire video and projections
         # on quantiles of average projection before per-ROI processing
