@@ -396,12 +396,12 @@ class TransformPipeline(argschema.ArgSchemaParser):
             imageio.imsave(outline_path, outline, transparency=255)
             imageio.imsave(full_outline_path, full_outline, transparency=255)
 
+            # video sub-frame
+            inds, pads = content_extents(
+                    roi._sparse_coo,
+                    shape=self.args['cropped_shape'],
+                    target_shape=tuple(downsampled_video.shape[1:]))
             if not self.args['skip_movies']:
-                # video sub-frame
-                inds, pads = content_extents(
-                        roi._sparse_coo,
-                        shape=self.args['cropped_shape'],
-                        target_shape=tuple(downsampled_video.shape[1:]))
                 sub_video = np.pad(
                         downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
                         ((0, 0), *pads))
