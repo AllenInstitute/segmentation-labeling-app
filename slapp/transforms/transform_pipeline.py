@@ -156,6 +156,13 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=False,
         description="for generating CNN inputs, can skip movies to speed up.")
+    all_ROIs = argschema.fields.Bool(
+        required=False,
+        default=False,
+        description=("if generating from prod manifest, makes artifacts for "
+                     "all ROIs. For disk space reasons, probably only want "
+                     "to do this with skip_movies=True."))
+ 
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -220,10 +227,10 @@ class ProdSegmentationRunManifestSchema(mm.Schema):
     experiment_id = mm.fields.Int(required=True)
     binarized_rois_path = argschema.fields.InputFile(required=True)
     # TODO: Consider using H5InputFile field from ophys_etl_pipelines
-    traces_h5_path = mm.fields.Str(required=True)
+    traces_h5_path = mm.fields.Str(required=False)
     # TODO: Consider using H5InputFile field from ophys_etl_pipelines
     movie_path = argschema.fields.Str(required=True)
-    local_to_global_roi_id_map = mm.fields.Dict(required=True,
+    local_to_global_roi_id_map = mm.fields.Dict(required=False,
                                                 keys=mm.fields.Int(),
                                                 values=mm.fields.Int())
 
@@ -240,12 +247,15 @@ class ProdSegmentationRunManifestSchema(mm.Schema):
         return data
 
 
-def xform_from_prod_manifest(prod_manifest_path: str
-                             ) -> Tuple[List[ROI], Path]:
+def xform_from_prod_manifest(prod_manifest_path: str,
+                             all_ROIs: bool) -> Tuple[List[ROI], Path]:
     with open(prod_manifest_path, 'r') as f:
         prod_manifest = json.load(f)
     prod_manifest = ProdSegmentationRunManifestSchema().load(prod_manifest)
     id_map = prod_manifest['local_to_global_roi_id_map']
+    if all_ROIs:
+        id_map = {roi['id']: roi['id']
+                  for roi in prod_manifest['binarized_rois']}
 
     rois = []
     for roi in prod_manifest['binarized_rois']:
@@ -258,7 +268,6 @@ def xform_from_prod_manifest(prod_manifest_path: str
                 xoffset=roi['x'],
                 yoffset=roi['y'],
                 shape=prod_manifest['movie_frame_shape'])
-
         converted_roi_id = id_map[roi['id']]
 
         with h5py.File(prod_manifest['traces_h5_path'], 'r') as h5f:
@@ -286,7 +295,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
         if 'prod_segmentation_run_manifest' in self.args:
             rois, video_path = xform_from_prod_manifest(
-                prod_manifest_path=self.args['prod_segmentation_run_manifest']
+                prod_manifest_path=self.args['prod_segmentation_run_manifest'],
+                all_ROIs=self.args['all_ROIs']
             )
             output_dir = Path(self.args['artifact_basedir']) / \
                 self.timestamp
