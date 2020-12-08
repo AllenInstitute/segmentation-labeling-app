@@ -92,7 +92,11 @@ class DbConnection():
     @staticmethod
     def _select(cursor, query):
         cursor.execute(query)
-        columns = [d[0].decode("utf-8") for d in cursor.description]
+        try:
+            columns = [d[0].decode("utf-8") for d in cursor.description]
+        except AttributeError:
+            # Version 1.16.6 pg8000 values are already decoded into str
+            columns = [d[0] for d in cursor.description]
         return [dict(zip(columns, c)) for c in cursor.fetchall()]
 
     def insert(self, statement):
