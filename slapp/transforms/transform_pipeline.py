@@ -157,6 +157,11 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=False,
         description="for generating CNN inputs, can skip movies to speed up.")
+    skip_traces = argschema.fields.Bool(
+        required=False,
+        default=False,
+        description='Skip producing trace artifacts'
+    )
     all_ROIs = argschema.fields.Bool(
         required=False,
         default=False,
@@ -250,7 +255,8 @@ class ProdSegmentationRunManifestSchema(mm.Schema):
 
 
 def xform_from_prod_manifest(prod_manifest_path: str,
-                             all_ROIs: bool) -> Tuple[List[ROI], Path]:
+                             all_ROIs: bool,
+                             include_trace=True) -> Tuple[List[ROI], Path]:
     with open(prod_manifest_path, 'r') as f:
         prod_manifest = json.load(f)
     prod_manifest = ProdSegmentationRunManifestSchema().load(prod_manifest)
@@ -272,9 +278,12 @@ def xform_from_prod_manifest(prod_manifest_path: str,
                 shape=prod_manifest['movie_frame_shape'])
         converted_roi_id = id_map[roi['id']]
 
-        with h5py.File(prod_manifest['traces_h5_path'], 'r') as h5f:
-            traces_id_order = list(h5f['roi_names'][:].astype(int))
-            roi_trace = h5f['data'][traces_id_order.index(roi['id'])]
+        if include_trace:
+            with h5py.File(prod_manifest['traces_h5_path'], 'r') as h5f:
+                traces_id_order = list(h5f['roi_names'][:].astype(int))
+                roi_trace = h5f['data'][traces_id_order.index(roi['id'])]
+        else:
+            roi_trace = None
 
         converted_roi = ROI(coo_rows=roi_stamp.row,
                             coo_cols=roi_stamp.col,
@@ -286,7 +295,7 @@ def xform_from_prod_manifest(prod_manifest_path: str,
                             is_binary=True)
         rois.append(converted_roi)
 
-    return (rois, Path(prod_manifest['movie_path']))
+    return rois, Path(prod_manifest['movie_path'])
 
 
 class TransformPipeline(argschema.ArgSchemaParser):
@@ -297,7 +306,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
         rois, video_path = xform_from_prod_manifest(
             prod_manifest_path=self.args['prod_segmentation_run_manifest'],
-            all_ROIs=self.args['all_ROIs']
+            all_ROIs=self.args['all_ROIs'],
+            include_trace=not self.args['skip_traces']
         )
         output_dir = Path(self.args['artifact_basedir']) / \
             self.timestamp
