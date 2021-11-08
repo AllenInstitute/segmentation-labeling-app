@@ -40,7 +40,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
                      "If not provided, will attempt to query using args: "
                      "ophys_experiment_id, ophys_segmentation_commit_hash."))
     prod_segmentation_run_manifest = argschema.fields.InputFile(
-        required=False,
+        required=True,
         description=("A field which allows for a slapp manifest to be created "
                      "from a production segmentation run.")
     )
@@ -292,24 +292,15 @@ def xform_from_prod_manifest(prod_manifest_path: str,
 class TransformPipeline(argschema.ArgSchemaParser):
     default_schema = TransformPipelineSchema
 
-    def run(self, db_conn: query_utils.DbConnection):
+    def run(self):
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
-        if 'prod_segmentation_run_manifest' in self.args:
-            rois, video_path = xform_from_prod_manifest(
-                prod_manifest_path=self.args['prod_segmentation_run_manifest'],
-                all_ROIs=self.args['all_ROIs']
-            )
-            output_dir = Path(self.args['artifact_basedir']) / \
-                self.timestamp
-        else:
-            rois, video_path = xform_from_slapp_db(
-                db_conn=db_conn,
-                segmentation_run_id=self.args['segmentation_run_id']
-            )
-            output_dir = Path(self.args['artifact_basedir']) / \
-                f"seg_run_id_{self.args['segmentation_run_id']}" / \
-                self.timestamp
+        rois, video_path = xform_from_prod_manifest(
+            prod_manifest_path=self.args['prod_segmentation_run_manifest'],
+            all_ROIs=self.args['all_ROIs']
+        )
+        output_dir = Path(self.args['artifact_basedir']) / \
+            self.timestamp
         os.makedirs(output_dir, exist_ok=True)
 
         downsampled_video = downsample_h5_video(
@@ -485,10 +476,5 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    db_credentials = query_utils.get_db_credentials(
-            env_prefix="LABELING_",
-            **query_utils.label_defaults)
-    db_connection = query_utils.DbConnection(**db_credentials)
-
     pipeline = TransformPipeline()
-    pipeline.run(db_connection)
+    pipeline.run()
