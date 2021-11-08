@@ -326,6 +326,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         max_projection = np.max(downsampled_video, axis=0)
         correlation_projection = plt.imread(self.args[
                                                 'correlation_projection_path'])
+        correlation_projection = correlation_projection[:, :, 0]
         movie_quantiles = [self.args['movie_lower_quantile'],
                            self.args['movie_upper_quantile']]
         proj_quantiles = [self.args['projection_lower_quantile'],
