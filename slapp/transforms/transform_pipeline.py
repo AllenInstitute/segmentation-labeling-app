@@ -168,6 +168,8 @@ class TransformPipelineSchema(argschema.ArgSchema):
         description=("if generating from prod manifest, makes artifacts for "
                      "all ROIs. For disk space reasons, probably only want "
                      "to do this with skip_movies=True."))
+    correlation_projection_path = argschema.fields.InputFile(
+        required=True, description='Path to correlation projection png')
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -238,8 +240,6 @@ class ProdSegmentationRunManifestSchema(mm.Schema):
     local_to_global_roi_id_map = mm.fields.Dict(required=False,
                                                 keys=mm.fields.Int(),
                                                 values=mm.fields.Int())
-    correlation_projection_path = argschema.fields.InputFile(
-        required=True, description='Path to correlation projection pngs')
 
     @mm.post_load
     def load_rois(self, data, **kwargs) -> dict:
