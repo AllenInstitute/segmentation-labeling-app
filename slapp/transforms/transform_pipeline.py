@@ -371,15 +371,17 @@ class TransformPipeline(argschema.ArgSchemaParser):
         insert_statements = []
         manifests = []
         for roi in rois:
+            roi_id = f'{roi.experiment_id}_{roi.roi_id}'
+
             # mask and outline from ROI class
-            mask_path = output_dir / f"mask_{roi.roi_id}.png"
-            outline_path = output_dir / f"outline_{roi.roi_id}.png"
-            full_outline_path = output_dir / f"full_outline_{roi.roi_id}.png"
-            sub_video_path = output_dir / f"video_{roi.roi_id}.webm"
-            max_proj_path = output_dir / f"max_{roi.roi_id}.png"
-            avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
-            corr_proj_path = output_dir / f"corr_{roi.roi_id}.png"
-            trace_path = output_dir / f"trace_{roi.roi_id}.json"
+            mask_path = output_dir / f"mask_{roi_id}.png"
+            outline_path = output_dir / f"outline_{roi_id}.png"
+            full_outline_path = output_dir / f"full_outline_{roi_id}.png"
+            sub_video_path = output_dir / f"video_{roi_id}.webm"
+            max_proj_path = output_dir / f"max_{roi_id}.png"
+            avg_proj_path = output_dir / f"avg_{roi_id}.png"
+            corr_proj_path = output_dir / f"corr_{roi_id}.png"
+            trace_path = output_dir / f"trace_{roi_id}.json"
 
             mask = roi.generate_ROI_mask(
                     shape=self.args['cropped_shape'])
