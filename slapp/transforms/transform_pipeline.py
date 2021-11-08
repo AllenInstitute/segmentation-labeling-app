@@ -152,6 +152,17 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=0.78125,
         description="microns per pixel in the 2P source video")
+    skip_movies = argschema.fields.Bool(
+        required=False,
+        default=False,
+        description="for generating CNN inputs, can skip movies to speed up.")
+    all_ROIs = argschema.fields.Bool(
+        required=False,
+        default=False,
+        description=("if generating from prod manifest, makes artifacts for "
+                     "all ROIs. For disk space reasons, probably only want "
+                     "to do this with skip_movies=True."))
+ 
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -216,10 +227,10 @@ class ProdSegmentationRunManifestSchema(mm.Schema):
     experiment_id = mm.fields.Int(required=True)
     binarized_rois_path = argschema.fields.InputFile(required=True)
     # TODO: Consider using H5InputFile field from ophys_etl_pipelines
-    traces_h5_path = mm.fields.Str(required=True)
+    traces_h5_path = mm.fields.Str(required=False)
     # TODO: Consider using H5InputFile field from ophys_etl_pipelines
     movie_path = argschema.fields.Str(required=True)
-    local_to_global_roi_id_map = mm.fields.Dict(required=True,
+    local_to_global_roi_id_map = mm.fields.Dict(required=False,
                                                 keys=mm.fields.Int(),
                                                 values=mm.fields.Int())
 
@@ -236,12 +247,15 @@ class ProdSegmentationRunManifestSchema(mm.Schema):
         return data
 
 
-def xform_from_prod_manifest(prod_manifest_path: str
-                             ) -> Tuple[List[ROI], Path]:
+def xform_from_prod_manifest(prod_manifest_path: str,
+                             all_ROIs: bool) -> Tuple[List[ROI], Path]:
     with open(prod_manifest_path, 'r') as f:
         prod_manifest = json.load(f)
     prod_manifest = ProdSegmentationRunManifestSchema().load(prod_manifest)
     id_map = prod_manifest['local_to_global_roi_id_map']
+    if all_ROIs:
+        id_map = {roi['id']: roi['id']
+                  for roi in prod_manifest['binarized_rois']}
 
     rois = []
     for roi in prod_manifest['binarized_rois']:
@@ -254,7 +268,6 @@ def xform_from_prod_manifest(prod_manifest_path: str
                 xoffset=roi['x'],
                 yoffset=roi['y'],
                 shape=prod_manifest['movie_frame_shape'])
-
         converted_roi_id = id_map[roi['id']]
 
         with h5py.File(prod_manifest['traces_h5_path'], 'r') as h5f:
@@ -282,7 +295,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
         if 'prod_segmentation_run_manifest' in self.args:
             rois, video_path = xform_from_prod_manifest(
-                prod_manifest_path=self.args['prod_segmentation_run_manifest']
+                prod_manifest_path=self.args['prod_segmentation_run_manifest'],
+                all_ROIs=self.args['all_ROIs']
             )
             output_dir = Path(self.args['artifact_basedir']) / \
                 self.timestamp
@@ -314,8 +328,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
         # normalize movie according to avg quantiles
         lower_cutoff, upper_cutoff = np.quantile(
                 avg_projection.flatten(), movie_quantiles)
-        downsampled_video = normalize_array(
-                downsampled_video, lower_cutoff, upper_cutoff)
+        if not self.args['skip_movies']:
+            downsampled_video = normalize_array(
+                    downsampled_video, lower_cutoff, upper_cutoff)
         # normalize avg projection
         lower_cutoff, upper_cutoff = np.quantile(
                 avg_projection.flatten(), proj_quantiles)
@@ -330,11 +345,13 @@ class TransformPipeline(argschema.ArgSchemaParser):
         playback_fps = self.args['output_fps'] * self.args['playback_factor']
 
         # experiment-level artifact
-        full_video_path = output_dir / "full_video.webm"
-        transform_to_webm(
-            video=downsampled_video, output_path=str(full_video_path),
-            fps=playback_fps, ncpu=self.args['webm_parallelization'],
-            bitrate=self.args['webm_bitrate'], crf=self.args['webm_quality'])
+        if not self.args['skip_movies']:
+            full_video_path = output_dir / "full_video.webm"
+            transform_to_webm(
+                video=downsampled_video, output_path=str(full_video_path),
+                fps=playback_fps, ncpu=self.args['webm_parallelization'],
+                bitrate=self.args['webm_bitrate'],
+                crf=self.args['webm_quality'])
 
         # where to position the scales for the outlines
         scale_position = (
@@ -394,14 +411,15 @@ class TransformPipeline(argschema.ArgSchemaParser):
                     roi._sparse_coo,
                     shape=self.args['cropped_shape'],
                     target_shape=tuple(downsampled_video.shape[1:]))
-            sub_video = np.pad(
-                    downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
-                    ((0, 0), *pads))
-            transform_to_webm(
-                video=sub_video, output_path=str(sub_video_path),
-                fps=playback_fps, ncpu=self.args['webm_parallelization'],
-                bitrate=self.args['webm_bitrate'],
-                crf=self.args['webm_quality'])
+            if not self.args['skip_movies']:
+                sub_video = np.pad(
+                        downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
+                        ((0, 0), *pads))
+                transform_to_webm(
+                    video=sub_video, output_path=str(sub_video_path),
+                    fps=playback_fps, ncpu=self.args['webm_parallelization'],
+                    bitrate=self.args['webm_bitrate'],
+                    crf=self.args['webm_quality'])
 
             # sub-projections
             sub_max = np.pad(
@@ -411,20 +429,21 @@ class TransformPipeline(argschema.ArgSchemaParser):
             imageio.imsave(max_proj_path, sub_max)
             imageio.imsave(avg_proj_path, sub_ave)
 
-            # trace
-            trace = downsample_array(
-                    np.array(roi.trace),
-                    self.args['input_fps'],
-                    self.args['output_fps'],
-                    self.args['downsampling_strategy'],
-                    self.args['random_seed']).tolist()
-            trace_json = {
-                    "pointStart": 0,
-                    "pointInterval": 1.0 / playback_fps,
-                    "dataLength": len(trace),
-                    "trace": trace}
-            with open(trace_path, "w") as fp:
-                json.dump(trace_json, fp)
+            if not self.args['skip_movies']:
+                # trace
+                trace = downsample_array(
+                        np.array(roi.trace),
+                        self.args['input_fps'],
+                        self.args['output_fps'],
+                        self.args['downsampling_strategy'],
+                        self.args['random_seed']).tolist()
+                trace_json = {
+                        "pointStart": 0,
+                        "pointInterval": 1.0 / playback_fps,
+                        "dataLength": len(trace),
+                        "trace": trace}
+                with open(trace_path, "w") as fp:
+                    json.dump(trace_json, fp)
 
             # manifest entry creation
             manifest = {}
@@ -432,12 +451,13 @@ class TransformPipeline(argschema.ArgSchemaParser):
             manifest['roi-id'] = roi.roi_id
             manifest['source-ref'] = str(outline_path)
             manifest['roi-mask-source-ref'] = str(mask_path)
-            manifest['full-video-source-ref'] = str(full_video_path)
-            manifest['video-source-ref'] = str(sub_video_path)
             manifest['max-source-ref'] = str(max_proj_path)
             manifest['avg-source-ref'] = str(avg_proj_path)
-            manifest['trace-source-ref'] = str(trace_path)
             manifest['full-outline-source-ref'] = str(full_outline_path)
+            if not self.args['skip_movies']:
+                manifest['trace-source-ref'] = str(trace_path)
+                manifest['full-video-source-ref'] = str(full_video_path)
+                manifest['video-source-ref'] = str(sub_video_path)
 
             if 'output_manifest' in self.args:
                 manifests.append(manifest)
