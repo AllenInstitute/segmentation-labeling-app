@@ -10,6 +10,7 @@ from typing import List, Tuple
 import argschema
 import imageio
 import marshmallow as mm
+import matplotlib.pyplot as plt
 import numpy as np
 
 import slapp.utils.query_utils as query_utils
@@ -162,7 +163,6 @@ class TransformPipelineSchema(argschema.ArgSchema):
         description=("if generating from prod manifest, makes artifacts for "
                      "all ROIs. For disk space reasons, probably only want "
                      "to do this with skip_movies=True."))
- 
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -233,6 +233,8 @@ class ProdSegmentationRunManifestSchema(mm.Schema):
     local_to_global_roi_id_map = mm.fields.Dict(required=False,
                                                 keys=mm.fields.Int(),
                                                 values=mm.fields.Int())
+    correlation_projection_path = argschema.fields.InputFile(
+        required=True, description='Path to correlation projection pngs')
 
     @mm.post_load
     def load_rois(self, data, **kwargs) -> dict:
@@ -321,6 +323,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
         # on quantiles of average projection before per-ROI processing
         avg_projection = np.mean(downsampled_video, axis=0)
         max_projection = np.max(downsampled_video, axis=0)
+        correlation_projection = plt.imread(self.args[
+                                                'correlation_projection_path'])
         movie_quantiles = [self.args['movie_lower_quantile'],
                            self.args['movie_upper_quantile']]
         proj_quantiles = [self.args['projection_lower_quantile'],
@@ -372,6 +376,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             sub_video_path = output_dir / f"video_{roi.roi_id}.webm"
             max_proj_path = output_dir / f"max_{roi.roi_id}.png"
             avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
+            corr_proj_path = output_dir / f"corr_{roi.roi_id}.png"
             trace_path = output_dir / f"trace_{roi.roi_id}.json"
 
             mask = roi.generate_ROI_mask(
@@ -426,8 +431,11 @@ class TransformPipeline(argschema.ArgSchemaParser):
                     max_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
             sub_ave = np.pad(
                     avg_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
+            sub_corr = np.pad(
+                correlation_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
             imageio.imsave(max_proj_path, sub_max)
             imageio.imsave(avg_proj_path, sub_ave)
+            imageio.imsave(corr_proj_path, sub_corr)
 
             if not self.args['skip_movies']:
                 # trace
