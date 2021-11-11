@@ -309,8 +309,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
             all_ROIs=self.args['all_ROIs'],
             include_trace=not self.args['skip_traces']
         )
-        output_dir = Path(self.args['artifact_basedir']) / \
-            self.timestamp
+        output_dir = Path(self.args['artifact_basedir'])
         os.makedirs(output_dir, exist_ok=True)
 
         downsampled_video = downsample_h5_video(
