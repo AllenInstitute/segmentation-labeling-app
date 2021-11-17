@@ -10,6 +10,7 @@ from typing import List, Tuple
 import argschema
 import imageio
 import marshmallow as mm
+import matplotlib.pyplot as plt
 import numpy as np
 
 import slapp.utils.query_utils as query_utils
@@ -39,7 +40,7 @@ class TransformPipelineSchema(argschema.ArgSchema):
                      "If not provided, will attempt to query using args: "
                      "ophys_experiment_id, ophys_segmentation_commit_hash."))
     prod_segmentation_run_manifest = argschema.fields.InputFile(
-        required=False,
+        required=True,
         description=("A field which allows for a slapp manifest to be created "
                      "from a production segmentation run.")
     )
@@ -156,13 +157,19 @@ class TransformPipelineSchema(argschema.ArgSchema):
         required=False,
         default=False,
         description="for generating CNN inputs, can skip movies to speed up.")
+    skip_traces = argschema.fields.Bool(
+        required=False,
+        default=False,
+        description='Skip producing trace artifacts'
+    )
     all_ROIs = argschema.fields.Bool(
         required=False,
         default=False,
         description=("if generating from prod manifest, makes artifacts for "
                      "all ROIs. For disk space reasons, probably only want "
                      "to do this with skip_movies=True."))
- 
+    correlation_projection_path = argschema.fields.InputFile(
+        required=True, description='Path to correlation projection png')
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -248,7 +255,8 @@ class ProdSegmentationRunManifestSchema(mm.Schema):
 
 
 def xform_from_prod_manifest(prod_manifest_path: str,
-                             all_ROIs: bool) -> Tuple[List[ROI], Path]:
+                             all_ROIs: bool,
+                             include_trace=True) -> Tuple[List[ROI], Path]:
     with open(prod_manifest_path, 'r') as f:
         prod_manifest = json.load(f)
     prod_manifest = ProdSegmentationRunManifestSchema().load(prod_manifest)
@@ -270,9 +278,12 @@ def xform_from_prod_manifest(prod_manifest_path: str,
                 shape=prod_manifest['movie_frame_shape'])
         converted_roi_id = id_map[roi['id']]
 
-        with h5py.File(prod_manifest['traces_h5_path'], 'r') as h5f:
-            traces_id_order = list(h5f['roi_names'][:].astype(int))
-            roi_trace = h5f['data'][traces_id_order.index(roi['id'])]
+        if include_trace:
+            with h5py.File(prod_manifest['traces_h5_path'], 'r') as h5f:
+                traces_id_order = list(h5f['roi_names'][:].astype(int))
+                roi_trace = h5f['data'][traces_id_order.index(roi['id'])]
+        else:
+            roi_trace = None
 
         converted_roi = ROI(coo_rows=roi_stamp.row,
                             coo_cols=roi_stamp.col,
@@ -284,30 +295,21 @@ def xform_from_prod_manifest(prod_manifest_path: str,
                             is_binary=True)
         rois.append(converted_roi)
 
-    return (rois, Path(prod_manifest['movie_path']))
+    return rois, Path(prod_manifest['movie_path'])
 
 
 class TransformPipeline(argschema.ArgSchemaParser):
     default_schema = TransformPipelineSchema
 
-    def run(self, db_conn: query_utils.DbConnection):
+    def run(self):
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
-        if 'prod_segmentation_run_manifest' in self.args:
-            rois, video_path = xform_from_prod_manifest(
-                prod_manifest_path=self.args['prod_segmentation_run_manifest'],
-                all_ROIs=self.args['all_ROIs']
-            )
-            output_dir = Path(self.args['artifact_basedir']) / \
-                self.timestamp
-        else:
-            rois, video_path = xform_from_slapp_db(
-                db_conn=db_conn,
-                segmentation_run_id=self.args['segmentation_run_id']
-            )
-            output_dir = Path(self.args['artifact_basedir']) / \
-                f"seg_run_id_{self.args['segmentation_run_id']}" / \
-                self.timestamp
+        rois, video_path = xform_from_prod_manifest(
+            prod_manifest_path=self.args['prod_segmentation_run_manifest'],
+            all_ROIs=self.args['all_ROIs'],
+            include_trace=not self.args['skip_traces']
+        )
+        output_dir = Path(self.args['artifact_basedir'])
         os.makedirs(output_dir, exist_ok=True)
 
         downsampled_video = downsample_h5_video(
@@ -321,6 +323,9 @@ class TransformPipeline(argschema.ArgSchemaParser):
         # on quantiles of average projection before per-ROI processing
         avg_projection = np.mean(downsampled_video, axis=0)
         max_projection = np.max(downsampled_video, axis=0)
+        correlation_projection = plt.imread(self.args[
+                                                'correlation_projection_path'])
+        correlation_projection = correlation_projection[:, :, 0]
         movie_quantiles = [self.args['movie_lower_quantile'],
                            self.args['movie_upper_quantile']]
         proj_quantiles = [self.args['projection_lower_quantile'],
@@ -365,14 +370,17 @@ class TransformPipeline(argschema.ArgSchemaParser):
         insert_statements = []
         manifests = []
         for roi in rois:
+            roi_id = f'{roi.experiment_id}_{roi.roi_id}'
+
             # mask and outline from ROI class
-            mask_path = output_dir / f"mask_{roi.roi_id}.png"
-            outline_path = output_dir / f"outline_{roi.roi_id}.png"
-            full_outline_path = output_dir / f"full_outline_{roi.roi_id}.png"
-            sub_video_path = output_dir / f"video_{roi.roi_id}.webm"
-            max_proj_path = output_dir / f"max_{roi.roi_id}.png"
-            avg_proj_path = output_dir / f"avg_{roi.roi_id}.png"
-            trace_path = output_dir / f"trace_{roi.roi_id}.json"
+            mask_path = output_dir / f"mask_{roi_id}.png"
+            outline_path = output_dir / f"outline_{roi_id}.png"
+            full_outline_path = output_dir / f"full_outline_{roi_id}.png"
+            sub_video_path = output_dir / f"video_{roi_id}.webm"
+            max_proj_path = output_dir / f"max_{roi_id}.png"
+            avg_proj_path = output_dir / f"avg_{roi_id}.png"
+            corr_proj_path = output_dir / f"corr_{roi_id}.png"
+            trace_path = output_dir / f"trace_{roi_id}.json"
 
             mask = roi.generate_ROI_mask(
                     shape=self.args['cropped_shape'])
@@ -426,8 +434,11 @@ class TransformPipeline(argschema.ArgSchemaParser):
                     max_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
             sub_ave = np.pad(
                     avg_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
+            sub_corr = np.pad(
+                correlation_projection[inds[0]:inds[1], inds[2]:inds[3]], pads)
             imageio.imsave(max_proj_path, sub_max)
             imageio.imsave(avg_proj_path, sub_ave)
+            imageio.imsave(corr_proj_path, sub_corr)
 
             if not self.args['skip_movies']:
                 # trace
@@ -477,10 +488,5 @@ class TransformPipeline(argschema.ArgSchemaParser):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    db_credentials = query_utils.get_db_credentials(
-            env_prefix="LABELING_",
-            **query_utils.label_defaults)
-    db_connection = query_utils.DbConnection(**db_credentials)
-
     pipeline = TransformPipeline()
-    pipeline.run(db_connection)
+    pipeline.run()
