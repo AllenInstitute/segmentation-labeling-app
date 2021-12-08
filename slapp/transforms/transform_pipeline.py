@@ -170,6 +170,9 @@ class TransformPipelineSchema(argschema.ArgSchema):
                      "to do this with skip_movies=True."))
     correlation_projection_path = argschema.fields.InputFile(
         required=True, description='Path to correlation projection png')
+    downsample_video = argschema.fields.Boolean(
+        default=False, description='Whether to downsample video'
+    )
 
     @mm.pre_load
     def set_segmentation_run_id(self, data, **kwargs):
@@ -312,17 +315,21 @@ class TransformPipeline(argschema.ArgSchemaParser):
         output_dir = Path(self.args['artifact_basedir'])
         os.makedirs(output_dir, exist_ok=True)
 
-        downsampled_video = downsample_h5_video(
-                video_path,
-                self.args['input_fps'],
-                self.args['output_fps'],
-                self.args['downsampling_strategy'],
-                self.args['random_seed'])
+        if self.args['downsample_video']:
+            video = downsample_h5_video(
+                    video_path,
+                    self.args['input_fps'],
+                    self.args['output_fps'],
+                    self.args['downsampling_strategy'],
+                    self.args['random_seed'])
+        else:
+            with h5py.File(video_path, 'r') as h5f:
+                video = h5f['data'][:]
 
         # strategy for normalization: normalize entire video and projections
         # on quantiles of average projection before per-ROI processing
-        avg_projection = np.mean(downsampled_video, axis=0)
-        max_projection = np.max(downsampled_video, axis=0)
+        avg_projection = np.mean(video, axis=0)
+        max_projection = np.max(video, axis=0)
         correlation_projection = plt.imread(self.args[
                                                 'correlation_projection_path'])
         correlation_projection = correlation_projection[:, :, 0]
@@ -334,8 +341,8 @@ class TransformPipeline(argschema.ArgSchemaParser):
         lower_cutoff, upper_cutoff = np.quantile(
                 avg_projection.flatten(), movie_quantiles)
         if not self.args['skip_movies']:
-            downsampled_video = normalize_array(
-                    downsampled_video, lower_cutoff, upper_cutoff)
+            video = normalize_array(
+                    video, lower_cutoff, upper_cutoff)
         # normalize avg projection
         lower_cutoff, upper_cutoff = np.quantile(
                 avg_projection.flatten(), proj_quantiles)
@@ -353,7 +360,7 @@ class TransformPipeline(argschema.ArgSchemaParser):
         if not self.args['skip_movies']:
             full_video_path = output_dir / "full_video.webm"
             transform_to_webm(
-                video=downsampled_video, output_path=str(full_video_path),
+                video=video, output_path=str(full_video_path),
                 fps=playback_fps, ncpu=self.args['webm_parallelization'],
                 bitrate=self.args['webm_bitrate'],
                 crf=self.args['webm_quality'])
@@ -418,10 +425,10 @@ class TransformPipeline(argschema.ArgSchemaParser):
             inds, pads = content_extents(
                     roi._sparse_coo,
                     shape=self.args['cropped_shape'],
-                    target_shape=tuple(downsampled_video.shape[1:]))
+                    target_shape=tuple(video.shape[1:]))
             if not self.args['skip_movies']:
                 sub_video = np.pad(
-                        downsampled_video[:, inds[0]:inds[1], inds[2]:inds[3]],
+                        video[:, inds[0]:inds[1], inds[2]:inds[3]],
                         ((0, 0), *pads))
                 transform_to_webm(
                     video=sub_video, output_path=str(sub_video_path),
