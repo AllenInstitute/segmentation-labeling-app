@@ -17,3 +17,4 @@ pandas
 argschema==2.0.1
 jsonlines
 flake8
+imgaug

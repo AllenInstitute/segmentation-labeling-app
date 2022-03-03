@@ -6,6 +6,7 @@ import cv2
 import slapp.utils.query_utils as query_utils
 from slapp.transforms.array_utils import (
         center_pad_2d, crop_2d_array)
+import imgaug.augmenters as iaa
 
 
 def coo_from_lims_style(mask_matrix: List[List[bool]],
@@ -106,6 +107,8 @@ def sized_mask(
     if not full:
         mask = crop_2d_array(mask)
         if shape is not None:
+            mask = iaa.CenterCropToFixedSize(
+                width=shape[0], height=shape[1]).augment_image(image=mask)
             mask = center_pad_2d(mask, shape)
     return mask
 
